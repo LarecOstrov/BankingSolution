@@ -1,91 +1,40 @@
 ﻿using Banking.Application.Repositories.Interfaces;
 using Banking.Application.Services.Interfaces;
 using Banking.Domain.Entities;
+using Banking.Domain.Enums;
 using Banking.Domain.ValueObjects;
 using Banking.Infrastructure.Caching;
 using Banking.Infrastructure.Database.Entities;
 using Banking.Infrastructure.Messaging.Kafka;
+using Banking.Infrastructure.WebSockets;
+using Confluent.Kafka;
 using Serilog;
+using System.Text.Json;
 
 namespace Banking.Application.Services.Implementations;
 
 public class TransactionService : ITransactionService
 {
     private readonly ITransactionRepository _transactionRepository;
-    private readonly IKafkaProducer _kafkaProducer;
+    private readonly IBalanceHistoryRepository _balanceHistoryRepository;
     private readonly IRedisCacheService _redisCacheService;
     private readonly IAccountRepository _accountRepository;
+    private readonly WebSocketService _webSocketService;
 
     public TransactionService(
-        IKafkaProducer kafkaProducer,
         ITransactionRepository transactionRepository,
+        IBalanceHistoryRepository balanceHistoryRepository,
         IAccountRepository accountRepository,
-        IRedisCacheService redisCacheService)
+        IRedisCacheService redisCacheService,
+        WebSocketService webSocketService)
     {
-        _kafkaProducer = kafkaProducer;
         _transactionRepository = transactionRepository;
+        _balanceHistoryRepository = balanceHistoryRepository;
         _accountRepository = accountRepository;
         _redisCacheService = redisCacheService;
-    }
+        _webSocketService = webSocketService;
 
-    public async Task<Transaction> PublishTransactionAsync(Transaction transaction)
-    {
-        try
-        {
-            if (transaction.FromAccountId == transaction.ToAccountId)
-            {
-                Log.Warning("Transaction from and to accounts are same");
-                throw new Exception("Transaction from and to accounts are same");
-            }
-
-            if (transaction.Amount <= 0)
-            {
-                Log.Warning($"Invalid transaction amount: {transaction.Amount}");
-                throw new Exception("Invalid transaction amount");
-            }
-
-            if (transaction.FromAccountId != null)
-            {
-                var balanceKey = $"balance:{transaction.FromAccountId}";
-
-                var balance = await _redisCacheService.GetBalanceAsync(transaction.FromAccountId.Value);
-
-                if (balance == null)
-                {
-                    Log.Warning($"Balance for account {transaction.FromAccountId} not found in cache");
-                    throw new Exception("Balance information not available");
-                }
-
-                if (balance < transaction.Amount)
-                {
-                    Log.Warning($"Insufficient funds for account {transaction.FromAccountId}. " +
-                        $"Balance: {balance}, Required: {transaction.Amount}");
-                    throw new Exception($"Insufficient funds. Current balance is {balance}");
-                }
-            }
-
-            if (transaction.ToAccountId != null)
-            {
-                var balance = await _redisCacheService.GetBalanceAsync(transaction.ToAccountId.Value);
-
-                if (balance == null)
-                {
-                    Log.Warning($"Balance for account {transaction.ToAccountId} not found in cache");
-                    throw new Exception("Balance information not available");
-                }
-            }
-
-            var entity = TransactionEntity.FromDomain(transaction);
-            await _kafkaProducer.PublishAsync("transactions", entity);
-
-            return entity.ToDomain();
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "Error publishing transaction to Kafka");
-            throw;
-        }
-    }
+    }  
 
     public async Task<Transaction?> GetTransactionByIdAsync(Guid transactionId)
     {
@@ -93,52 +42,166 @@ public class TransactionService : ITransactionService
         return entity?.ToDomain();
     }
 
-    public async Task<bool> IsAccountOwnerAsync(Guid accountId, Guid userId)
-    {
-        var account = await _accountRepository.GetByIdAsync(accountId);
-        return account != null && account.UserId == userId;
-    }
+    
 
-    public async Task<bool> ProcessTransactionAsync(Guid? fromAccountId, Guid? toAccountId, decimal amount)
+    public async Task<bool> ProcessTransactionAsync(ConsumeResult<Null, string> consumeResult)
     {
-        using (var transaction = await _transactionRepository.BeginTransactionAsync())
+        try
         {
-            AccountEntity? fromAccount = null;
-            if (fromAccountId != null)
+            var transactionObject = JsonSerializer.Deserialize<Transaction>(consumeResult.Message.Value);
+            if (transactionObject == null)
             {
-                fromAccount = await _accountRepository.GetByIdForUpdateWithLockAsync(fromAccountId.Value);
-            }
-            AccountEntity? toAccount = null;
-            if (toAccountId != null)
-            {
-                toAccount = await _accountRepository.GetByIdForUpdateWithLockAsync(toAccountId.Value);
-            }
-
-            if (fromAccount == null && toAccount == null)
-            {
-                Log.Error("Required ");
-                throw new Exception("One of the accounts not found");
-            }
-
-            if (fromAccount != null && fromAccount.Balance < amount)
-            {
-                Log.Warning("Insufficient funds for transaction");
-                await transaction.RollbackAsync();
+                Log.Error("Received null transaction from Kafka");
                 return false;
             }
 
-            if (fromAccount != null)
+            using (var transaction = await _transactionRepository.BeginTransactionAsync())
             {
-                fromAccount.Balance -= amount;
+                var transactionEntity = await _transactionRepository.GetByIdAsync(transactionObject.Id);
+                if (transactionEntity == null)
+                {
+                    Log.Error($"Transaction {transactionObject.Id} not found.");
+                    await transaction.RollbackAsync();                    
+                    return false;
+                }
+
+                if (transactionEntity.Status != TransactionStatus.Pending)
+                {
+                    Log.Warning($"Transaction {transactionObject.Id} already processed.");
+                    return false;
+                }
+
+                var success = await ProcessTransactionInternal(transactionObject, transactionEntity);
+                if (!success)
+                {
+                    await transaction.RollbackAsync();
+
+                    transactionEntity.Status = TransactionStatus.Failed;
+                    await _transactionRepository.SaveChangesAsync();
+                    return true;
+                }
+
+                transactionEntity.Status = TransactionStatus.Completed;
+                await _transactionRepository.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return true;
             }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error processing transaction");
+            return false;
+        }
+    }
+
+
+    private async Task<bool> ProcessTransactionInternal(Transaction transactionObject, 
+        TransactionEntity transactionEntity)
+    {
+        AccountEntity? fromAccount = null, toAccount = null;
+
+        if (transactionObject.FromAccountId != null)
+        {
+            fromAccount = await _accountRepository.GetByIdForUpdateWithLockAsync(transactionObject.FromAccountId.Value);
+        }
+
+        if (transactionObject.ToAccountId != null)
+        {
+            toAccount = await _accountRepository.GetByIdForUpdateWithLockAsync(transactionObject.ToAccountId.Value);
+        }
+
+        if (fromAccount == null && toAccount == null)
+        {
+            Log.Error("Required minimum one account for transaction");
+            transactionEntity.FailureReason = "No accounts found for transaction";
+            return false;
+        }
+
+        if (fromAccount != null && fromAccount.Balance < transactionObject.Amount)
+        {
+            Log.Warning("Insufficient funds for transaction");
+            transactionEntity.FailureReason = "Insufficient funds";
+            return false;
+        }
+
+        if (fromAccount != null)
+        {
+            fromAccount.Balance -= transactionObject.Amount;
+        }
+        if (toAccount != null)
+        {
+            toAccount.Balance += transactionObject.Amount;
+        }
+
+        await _transactionRepository.SaveChangesAsync();
+
+        
+        if (fromAccount != null)
+        {
+            await _redisCacheService.UpdateBalanceAsync(fromAccount.Id, -transactionObject.Amount);
+            await SaveBalanceHistory(fromAccount, transactionObject.Id);
+        }
+        if (toAccount != null)
+        {
+            await _redisCacheService.UpdateBalanceAsync(toAccount.Id, transactionObject.Amount);
+            await SaveBalanceHistory(toAccount, transactionObject.Id);
+        }        
+        
+        await NotifyUsers(fromAccount, toAccount, transactionObject.Amount);
+
+        return true;
+    }
+
+
+
+    private async Task SaveBalanceHistory(AccountEntity? account, Guid transactionId)
+    {
+        if (account == null) return;
+
+        var history = new BalanceHistoryEntity
+        {
+            Id = Guid.NewGuid(),
+            AccountId = account.Id,
+            TransactionId = transactionId,
+            NewBalance = account.Balance,
+            CreatedAt = DateTime.UtcNow
+        };
+        await _balanceHistoryRepository.AddAsync(history);
+    }
+
+    private async Task NotifyUsers(AccountEntity? fromAccount, AccountEntity? toAccount, decimal amount)
+    {
+        if (fromAccount != null)
+        {
             if (toAccount != null)
             {
-                toAccount.Balance += amount;
+                await _webSocketService.SendTransactionNotificationAsync(
+                    fromAccount.User.Id, $"You sent {amount} to account {toAccount?.User.FullName}." +
+                    $" Current balance is {fromAccount?.Balance}.");
             }
-            await _transactionRepository.SaveChangesAsync();
+            else
+            {
+                await _webSocketService.SendTransactionNotificationAsync(
+                    fromAccount.User.Id, $"Withdrawal of {amount} from account {fromAccount?.AccountNumber}." +
+                    $" Current balance is {fromAccount?.Balance}.");
+            }
+        }
 
-            await transaction.CommitAsync();
-            return true;
+        if (toAccount != null)
+        {
+            if (fromAccount != null)
+            {
+                await _webSocketService.SendTransactionNotificationAsync(
+                toAccount.User.Id, $"You received {amount} from account {fromAccount?.User.FullName}." +
+                $" Current balance is {toAccount?.Balance}.");
+            }
+            else
+            {
+                await _webSocketService.SendTransactionNotificationAsync(
+                toAccount.User.Id, $"Your account {toAccount?.AccountNumber} funds received {amount}." +
+                $" Current balance is {toAccount?.Balance}!");
+            }
         }
     }
 }
+

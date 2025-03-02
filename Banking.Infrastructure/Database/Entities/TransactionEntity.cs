@@ -18,11 +18,11 @@ public class TransactionEntity
     public required decimal Amount { get; set; } = 0;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public required TransactionStatus Status { get; set; } = TransactionStatus.Pending;
-
+    public string? FailureReason { get; set; } = null;
     public static TransactionEntity FromDomain(Transaction transaction) =>
         new TransactionEntity
         {
-            Id = transaction.Id,
+            Id = Guid.NewGuid(),
             FromAccountId = transaction.FromAccountId,
             ToAccountId = transaction.ToAccountId,
             Amount = transaction.Amount,

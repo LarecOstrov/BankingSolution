@@ -10,6 +10,7 @@ using Banking.Infrastructure.Config;
 using Banking.Infrastructure.Database;
 using Banking.Infrastructure.Messaging.Kafka;
 using Banking.Infrastructure.Middleware;
+using Banking.Infrastructure.WebSockets;
 using Confluent.Kafka;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
@@ -68,7 +69,15 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
         dbOptions.UseSqlServer(solutionOptions.ConnectionStrings.DefaultConnection));
 
     // Kaffka Producer
-    var kafkaConfig = new ProducerConfig { BootstrapServers = solutionOptions.Kafka.BootstrapServers };
+    var kafkaConfig = new ProducerConfig 
+    { 
+        BootstrapServers = solutionOptions.Kafka.BootstrapServers,
+        Acks = Acks.All,
+        EnableIdempotence = true,
+        MessageSendMaxRetries = int.MaxValue,
+        LingerMs = 2,
+        BatchSize = 32 * 1024
+    };
     services.AddSingleton<ProducerConfig>(kafkaConfig);
     services.AddSingleton<IKafkaProducer, KafkaProducer>();
 
@@ -85,24 +94,26 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
     services.AddScoped<IUserRepository, UserRepository>();
     services.AddScoped<IRoleRepository, RoleRepository>();
     services.AddScoped<IBalanceHistoryRepository, BalanceHistoryRepository>();
+    services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+
 
     // Services
+    services.AddSingleton<WebSocketService>();
+    services.AddScoped<IPublishService, PublishService>();
     services.AddScoped<ITransactionService, TransactionService>();
     services.AddScoped<IAccountService, AccountService>();
     services.AddScoped<IAuthService, AuthService>();
     services.AddScoped<IRedisCacheService, RedisCacheService>();
 
     // GraphQL
-    services
-    .AddGraphQLServer()
-    .AddQueryType<Query>()
-
-    .AddFiltering()
-    .AddSorting()
-    .AddInstrumentation()
-    .AddProjections()
-    .ModifyRequestOptions(opt => opt.IncludeExceptionDetails = true)
-    .ModifyCostOptions(opt => opt.EnforceCostLimits = false);
+    services.AddGraphQLServer()
+        .AddQueryType<Query>()
+        .AddFiltering()
+        .AddSorting()
+        .AddInstrumentation()
+        .AddProjections()
+        .ModifyRequestOptions(opt => opt.IncludeExceptionDetails = true)
+        .ModifyCostOptions(opt => opt.EnforceCostLimits = false);
 
     services.AddScoped<Query>();
     services.AddAuthorization();
@@ -164,11 +175,11 @@ async Task ConfigureMiddleware(WebApplication app, SolutionOptions appOptions)
     app.UseAuthentication();
     app.UseAuthorization();
     app.MapGraphQL();
+    app.UseWebSockets();
     app.MapMetrics(); // Prometheus
 
     // Enable CORS
     app.UseCors(appOptions.Cors.Api.AllowedOrigins.Any() ? "AllowSpecificOrigins" : "AllowAll");
 
     app.MapControllers();
-    app.MapHealthChecks("/health");
 }

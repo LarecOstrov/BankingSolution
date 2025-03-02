@@ -25,6 +25,8 @@
     {
         public required string BootstrapServers { get; set; }
         public required string ConsumerGroup { get; set; }
+        public required string TransactionsTopic { get; set; }
+
     }
 
     public class LoggingOptions

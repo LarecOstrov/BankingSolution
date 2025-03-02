@@ -4,12 +4,18 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>af944d19-2b37-4bdb-97f4-0d47b78b4927</UserSecretsId>
+    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
   </PropertyGroup>
 
   <ItemGroup>
 	  <PackageReference Include="HotChocolate.AspNetCore" Version="15.0.3" />
 	  <PackageReference Include="HotChocolate.Data" Version="15.0.3" />
 	  <PackageReference Include="HotChocolate.Diagnostics" Version="15.0.3" />
+	  <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.2">
+	    <PrivateAssets>all</PrivateAssets>
+	    <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+	  </PackageReference>
 	  <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="9.0.2" />
 	  <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.21.2" />
 	  <PackageReference Include="prometheus-net.AspNetCore" Version="8.2.1" />

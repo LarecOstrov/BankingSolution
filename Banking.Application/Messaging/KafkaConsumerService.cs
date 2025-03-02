@@ -1,11 +1,12 @@
-﻿using Banking.Application.Services.Interfaces;
-using Banking.Domain.ValueObjects;
-using Banking.Infrastructure.Caching;
+﻿using Banking.Application.Repositories.Interfaces;
+using Banking.Application.Services.Interfaces;
+using Banking.Infrastructure.Config;
+using Banking.Infrastructure.Database.Entities;
 using Confluent.Kafka;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Serilog;
-using System.Text.Json;
 
 namespace Banking.Application.Messaging;
 
@@ -13,10 +14,14 @@ public class KafkaConsumerService : BackgroundService
 {
     private readonly IConsumer<Null, string> _consumer;
     private readonly IServiceScopeFactory _serviceScopeFactory;
+    private readonly SolutionOptions _solutionOptions;
 
-    public KafkaConsumerService(ConsumerConfig config, IServiceScopeFactory serviceScopeFactory)
+    public KafkaConsumerService(ConsumerConfig config,
+        IOptions<SolutionOptions> solutionOptions,
+        IServiceScopeFactory serviceScopeFactory)
     {
         _serviceScopeFactory = serviceScopeFactory;
+        _solutionOptions = solutionOptions.Value;
         _consumer = new ConsumerBuilder<Null, string>(config)
             .SetErrorHandler((_, e) => Log.Error($"Kafka Consumer error: {e.Reason}"))
             .Build();
@@ -24,7 +29,16 @@ public class KafkaConsumerService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _consumer.Subscribe("transactions");
+
+        using (var adminClient = new AdminClientBuilder(new AdminClientConfig
+        {
+            BootstrapServers = _solutionOptions.Kafka.BootstrapServers
+        }).Build())
+        {
+            await WaitForTopicAsync(_solutionOptions.Kafka.TransactionsTopic, adminClient);
+        }
+
+        _consumer.Subscribe(_solutionOptions.Kafka.TransactionsTopic);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -35,34 +49,20 @@ public class KafkaConsumerService : BackgroundService
 
                 using var scope = _serviceScopeFactory.CreateScope();
                 var transactionService = scope.ServiceProvider.GetRequiredService<ITransactionService>();
-                var redisCacheService = scope.ServiceProvider.GetRequiredService<IRedisCacheService>();
+                var failedTransactionRepository = scope.ServiceProvider.GetRequiredService<IFailedTransactionRepository>();
+                Log.Information($"Received transaction from Kafka: {consumeResult.Message.Value}");
 
-                Log.Information($"Processing transaction {consumeResult.Message.Value}...");
-                var transaction = JsonSerializer.Deserialize<Transaction>(consumeResult.Message.Value);
+                bool success = await transactionService.ProcessTransactionAsync(consumeResult);
 
-                if (transaction == null)
+                if (!success)
                 {
-                    Log.Error("Received null transaction from Kafka");
-                    continue;
-                }
-
-                var success = await transactionService.ProcessTransactionAsync(
-                    transaction.FromAccountId, transaction.ToAccountId, transaction.Amount);
-
-                if (success)
-                {
-                    if (transaction.FromAccountId != null)
+                    Log.Error($"Transaction failed, saving to Database: {consumeResult.Message.Value}");
+                    var failedTransaction = new FailedTransactionEntity
                     {
-                        await redisCacheService.UpdateBalanceAsync(transaction.FromAccountId.Value, -transaction.Amount);
-                    }
-                    if (transaction.ToAccountId != null)
-                    {
-                        await redisCacheService.UpdateBalanceAsync(transaction.ToAccountId.Value, transaction.Amount);
-                    }
-                }
-                else
-                {
-                    Log.Warning($"Transaction {transaction.Id} failed due to insufficient funds");
+                        TransactionMessage = consumeResult.Message.Value,
+                        Reason = "Declined by service",
+                    };
+                    await failedTransactionRepository.AddAsync(failedTransaction);
                 }
             }
             catch (ConsumeException ex)
@@ -78,4 +78,28 @@ public class KafkaConsumerService : BackgroundService
 
         _consumer.Close();
     }
+
+    private async Task WaitForTopicAsync(string topic, IAdminClient adminClient)
+    {
+        Log.Information($"Kafka start wait for topic {topic}");
+        while (true)
+        {
+            try
+            {
+                var metadata = adminClient.GetMetadata(TimeSpan.FromSeconds(5));
+                if (metadata.Topics.Any(t => t.Topic == topic))
+                {
+                    Log.Information($"Topic {topic} is available.");
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Waiting for topic {topic}: {ex.Message}");
+                await Task.Delay(5000);
+                continue;
+            }
+        }
+    }
+
 }

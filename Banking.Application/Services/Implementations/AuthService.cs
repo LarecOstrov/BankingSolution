@@ -61,7 +61,8 @@ public class AuthService : IAuthService
             FullName = fullName,
             Email = email,
             PasswordHash = HashPassword(password),
-            RoleId = role.Id
+            RoleId = role.Id,
+            Confirmed = false
         };
 
         return await _userRepository.AddAsync(user) is not null;
