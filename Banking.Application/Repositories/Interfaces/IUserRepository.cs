@@ -6,5 +6,6 @@ namespace Banking.Application.Repositories.Interfaces
         Task<UserEntity?> GetUserByEmailAsync(string email);
         Task<IEnumerable<UserEntity>> GetUnconfirmedUsersAsync();
         Task<bool> ConfirmUserAsync(Guid userId);
+        Task<bool> AssignRoleAsync(Guid userId, Guid roleId);
     }
 }

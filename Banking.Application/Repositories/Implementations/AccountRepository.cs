@@ -16,6 +16,7 @@ public class AccountRepository : BaseRepository<AccountEntity>, IAccountReposito
 
     public async Task<AccountEntity?> GetByIdForUpdateWithLockAsync(Guid id)
         => await _dbContext.Accounts.FromSqlRaw($"SELECT * FROM Accounts WITH (UPDLOCK, ROWLOCK) WHERE Id = 'id'", id)
+        .Include(a => a.User)
         .FirstOrDefaultAsync();
 }
 

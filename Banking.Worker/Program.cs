@@ -1,3 +1,4 @@
+using Banking.Application.Messaging;
 using Banking.Application.Repositories.Implementations;
 using Banking.Application.Repositories.Interfaces;
 using Banking.Application.Services.Implementations;
@@ -21,18 +22,15 @@ try
 
     ConfigureServicesAsync(builder.Services, appOptions);
 
-    var app = builder.Build();
-
-    // Middleware pipeline setup
-    app.UseRouting();
+    var app = builder.Build();    
 
     // Allow CORS for WebSockets
     app.UseCors(appOptions.Cors.Worker.AllowedOrigins.Any() ? "AllowSpecificOrigins" : "AllowAll");
 
-    // WebSockets
-    app.UseWebSockets();
-    app.MapHub<WebSocketHub>("/ws");
-    app.MapHealthChecks("/health");
+    // Middleware pipeline setup
+    app.UseRouting();
+    app.MapControllers();
+    
     Log.Information("Starting Web Application...");
 
     await app.RunAsync();
@@ -67,31 +65,31 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
     Log.Information($"Connection Kafka BootstrapServers: {solutionOptions.Kafka.BootstrapServers}");
     Log.Information($"Consumer Kafka ConsumerGroup: {solutionOptions.Kafka.ConsumerGroup}");
 
-    // Register RabbitMQ services
+    //  Kafka configuration
     var kafkaConfig = new ConsumerConfig
     {
         BootstrapServers = solutionOptions.Kafka.BootstrapServers,
         GroupId = solutionOptions.Kafka.ConsumerGroup,
-        AutoOffsetReset = AutoOffsetReset.Earliest
+        AutoOffsetReset = AutoOffsetReset.Earliest,
+        EnableAutoCommit = false,
+        IsolationLevel = IsolationLevel.ReadCommitted,
+        AllowAutoCreateTopics = true
     };
 
-    services.AddSingleton(kafkaConfig);
-
-
     // Services
+    services.AddControllers();
+    services.AddSingleton(kafkaConfig);
+    services.AddHostedService<KafkaConsumerService>();
+    services.AddSingleton<WebSocketService>();
     services.AddScoped<IRedisCacheService, RedisCacheService>();
     services.AddScoped<ITransactionService, TransactionService>();
 
-    services.AddSignalR(options =>
+    // Redis configuration    
+    services.AddStackExchangeRedisCache(redisOptions =>
     {
-        options.KeepAliveInterval = TimeSpan.FromSeconds(30);
-        options.ClientTimeoutInterval = TimeSpan.FromMinutes(2);
-    })
-    .AddJsonProtocol(options =>
-    {
-        options.PayloadSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
-    });
-    services.AddSingleton<WebSocketHub>();
+        redisOptions.Configuration = solutionOptions.Redis.Host;
+        redisOptions.InstanceName = solutionOptions.Redis.InstanceName;
+    });    
 
     // Register repositories
     services.AddScoped<IAccountRepository, AccountRepository>();
@@ -99,7 +97,7 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
     services.AddScoped<IUserRepository, UserRepository>();
     services.AddScoped<IRoleRepository, RoleRepository>();
     services.AddScoped<IBalanceHistoryRepository, BalanceHistoryRepository>();
-
+    services.AddScoped<IFailedTransactionRepository, FailedTransactionRepository>();
 
     var corsOptions = solutionOptions.Cors;
     services.AddCors(options =>

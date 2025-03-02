@@ -10,17 +10,27 @@ namespace Banking.API.GraphQL
     public class Query
     {
         private readonly IAccountRepository _accountRepository;
+        private readonly IFailedTransactionRepository _failedTransactionRepository;
+        private readonly IBalanceHistoryRepository _balanceHistoryRepository;
         private readonly ITransactionRepository _transactionRepository;
         private readonly IUserRepository _userRepository;
+        private readonly IRoleRepository _roleRepository;
+
 
         public Query(
             IAccountRepository accountRepository,
             ITransactionRepository transactionRepository,
-            IUserRepository userRepository)
+            IFailedTransactionRepository failedTransactionRepository,
+            IBalanceHistoryRepository balanceHistoryRepository,
+            IUserRepository userRepository,
+            IRoleRepository roleRepository)
         {
             _accountRepository = accountRepository;
             _transactionRepository = transactionRepository;
+            _failedTransactionRepository = failedTransactionRepository;
+            _balanceHistoryRepository = balanceHistoryRepository;
             _userRepository = userRepository;
+            _roleRepository = roleRepository;
         }
 
         [UsePaging(IncludeTotalCount = true, MaxPageSize = 25)]
@@ -71,6 +81,57 @@ namespace Banking.API.GraphQL
             {
                 Log.Error(ex, "Failed to get Users");
                 throw new GraphQLException($"Failed to get Users: {ex.Message}");
+            }
+        }
+
+        [UsePaging(IncludeTotalCount = true, MaxPageSize = 25)]
+        [UseProjection]
+        [UseFiltering]
+        [UseSorting]
+        public IQueryable<FailedTransactionEntity> GetFailedTransactions()
+        {
+            try
+            {
+                return _failedTransactionRepository.GetAll();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to get Failed Transactions");
+                throw new GraphQLException($"Failed to get Failed Transactions: {ex.Message}");
+            }
+        }
+
+        [UsePaging(IncludeTotalCount = true, MaxPageSize = 25)]
+        [UseProjection]
+        [UseFiltering]
+        [UseSorting]
+        public IQueryable<BalanceHistoryEntity> GetBalanceHistories()
+        {
+            try
+            {
+                return _balanceHistoryRepository.GetAll();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to get Balance Histories");
+                throw new GraphQLException($"Failed to get Balance Histories: {ex.Message}");
+            }
+        }
+
+        [UsePaging(IncludeTotalCount = true, MaxPageSize = 25)]
+        [UseProjection]
+        [UseFiltering]
+        [UseSorting]
+        public IQueryable<RoleEntity> GetRoles()
+        {
+            try
+            {
+                return _roleRepository.GetAll();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to get Roles");
+                throw new GraphQLException($"Failed to get Roles: {ex.Message}");
             }
         }
     }

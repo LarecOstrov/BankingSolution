@@ -11,26 +11,30 @@ namespace Banking.API.Controllers
     [Authorize]
     public class TransactionController : ControllerBase
     {
-        private readonly ITransactionService _transactionService;
+        private readonly IPublishService _publishService;
+        private readonly IAccountService _accountService;
         private readonly IAuthService _authService;
 
-        public TransactionController(ITransactionService transactionService,
-            IAuthService authService)
+        public TransactionController(
+            IPublishService publishService,
+            IAuthService authService,
+            IAccountService accountService)
         {
-            _transactionService = transactionService;
+            _publishService = publishService;
             _authService = authService;
+            _accountService = accountService;
         }
 
         /// <summary>
         /// Deposit funds (only for authorized services)
         /// </summary>
         [HttpPost("deposit")]
-        [Authorize(Roles = "PaymentService, Admin")] // Доступ лише для сервісів або адміністраторів
+        [Authorize(Roles = "PaymentService, Admin")] 
         public async Task<IActionResult> Deposit([FromBody] DepositRequest request)
         {
             try
             {
-                return Accepted(await _transactionService.PublishTransactionAsync(new Transaction(
+                return Accepted(await _publishService.PublishTransactionAsync(new Transaction(
                     Guid.NewGuid(),
                     null,
                     request.ToAccountId,
@@ -54,7 +58,7 @@ namespace Banking.API.Controllers
         {
             try
             {
-                return Accepted(await _transactionService.PublishTransactionAsync(new Transaction(
+                return Accepted(await _publishService.PublishTransactionAsync(new Transaction(
                     Guid.NewGuid(),
                     request.FromAccountId,
                     null,
@@ -82,13 +86,13 @@ namespace Banking.API.Controllers
                     return Unauthorized("User ID not found in token.");
                 }
 
-                var isOwner = await _transactionService.IsAccountOwnerAsync(request.FromAccountId, userId.Value);
+                var isOwner = await _accountService.IsAccountOwnerAsync(request.FromAccountId, userId.Value);
                 if (!isOwner)
                 {
                     return Forbid("You can only transfer funds from your own account.");
                 }
 
-                return Accepted(await _transactionService.PublishTransactionAsync(new Transaction(
+                return Accepted(await _publishService.PublishTransactionAsync(new Transaction(
                     Guid.NewGuid(),
                     request.FromAccountId,
                     request.ToAccountId,
