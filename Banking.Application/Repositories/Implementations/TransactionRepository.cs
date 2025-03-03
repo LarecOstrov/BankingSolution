@@ -8,10 +8,6 @@ namespace Banking.Application.Repositories.Implementations
     public class TransactionRepository : BaseRepository<TransactionEntity>, ITransactionRepository
     {
         public TransactionRepository(ApplicationDbContext dbContext) : base(dbContext) { }
-
-        public async Task<IDbContextTransaction> BeginTransactionAsync()
-        {
-            return await _dbContext.Database.BeginTransactionAsync();
-        }
+        
     }
 }

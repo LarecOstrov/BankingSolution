@@ -1,3 +1,4 @@
+using Banking.API.GraphQL;
 using Banking.Application.Implementations;
 using Banking.Application.Repositories.Implementations;
 using Banking.Application.Repositories.Interfaces;
@@ -16,13 +17,13 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Prometheus;
 using Serilog;
-using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
+
 
 try
 {
     var builder = WebApplication.CreateBuilder(args);
 
-    // Load AppOptions from Common
+    // Load SolutionOptions from Infrustructure appsettings.json
     var solutionOptions = LoadSolutionOptionsHelper.LoadSolutionOptions(builder);
 
     ConfigureLogging(builder);
@@ -82,11 +83,11 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
     services.AddSingleton<IKafkaProducer, KafkaProducer>();
 
     // Add Controllers
-    services.AddControllers()
-        .AddJsonOptions(options =>
-        {
-            options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.Preserve;
-        });
+    services.AddControllers();
+        //.AddJsonOptions(options =>
+        //{
+        //    options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.Preserve;
+        //});
 
     // Repositories
     services.AddScoped<IAccountRepository, AccountRepository>();
@@ -95,6 +96,8 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
     services.AddScoped<IRoleRepository, RoleRepository>();
     services.AddScoped<IBalanceHistoryRepository, BalanceHistoryRepository>();
     services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+    services.AddScoped<IFailedTransactionRepository, FailedTransactionRepository>();
+
 
 
     // Services
@@ -107,6 +110,7 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
 
     // GraphQL
     services.AddGraphQLServer()
+        .AddAuthorization()
         .AddQueryType<Query>()
         .AddFiltering()
         .AddSorting()

@@ -1,10 +1,12 @@
-﻿using System.Security.Claims;
+﻿using Banking.Domain.ValueObjects;
+using System.Security.Claims;
 
 namespace Banking.Application.Services.Interfaces;
 
 public interface IAuthService
 {
-    Task<string?> LoginAsync(string email, string password);
-    Task<bool> RegisterAsync(string fullName, string email, string password, string roleName);
+    Task<LoginResponse?> LoginAsync(LoginRequest request);
+    Task<bool> RegisterAsync(RegisterRequest request);
+    Task<string?> RefreshTokenAsync(string refreshToken);
     Guid? GetUserIdFromToken(ClaimsPrincipal user);
 }

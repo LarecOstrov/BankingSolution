@@ -18,5 +18,10 @@ public class AccountRepository : BaseRepository<AccountEntity>, IAccountReposito
         => await _dbContext.Accounts.FromSqlRaw($"SELECT * FROM Accounts WITH (UPDLOCK, ROWLOCK) WHERE Id = 'id'", id)
         .Include(a => a.User)
         .FirstOrDefaultAsync();
+
+    public async Task<bool> ExistsAsync(string accountNumber)
+    {
+        return await _dbContext.Accounts.AnyAsync(a => a.AccountNumber == accountNumber);
+    }
 }
 

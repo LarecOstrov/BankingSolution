@@ -11,10 +11,10 @@ public class AccountEntity
     public Guid Id { get; set; }
     public required Guid UserId { get; set; }
     public UserEntity User { get; set; } = null!;
-    [MaxLength(20)]
+    [MaxLength(34)]
     public required string AccountNumber { get; set; } = string.Empty;
-    public required decimal Balance { get; set; } = 0m;
-    public required DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public decimal Balance { get; set; } = 0m;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public ICollection<TransactionEntity> TransactionsFrom { get; set; } = new List<TransactionEntity>();
     public ICollection<TransactionEntity> TransactionsTo { get; set; } = new List<TransactionEntity>();
 }

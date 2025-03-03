@@ -5,5 +5,4 @@ namespace Banking.Application.Repositories.Interfaces;
 
 public interface ITransactionRepository : IBaseRepository<TransactionEntity>
 {
-    Task<IDbContextTransaction> BeginTransactionAsync();
 }

@@ -1,6 +1,7 @@
 ﻿using Banking.Application.Repositories.Interfaces;
 using Banking.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Banking.Application.Repositories.Implementations
 {
@@ -15,9 +16,16 @@ namespace Banking.Application.Repositories.Implementations
             _dbSet = dbContext.Set<T>();
         }
 
+        public async Task<IDbContextTransaction> BeginTransactionAsync()
+        {
+            return await _dbContext.Database.BeginTransactionAsync();
+        }
+
         public async Task<T?> GetByIdAsync(Guid id) => await _dbSet.FindAsync(id);
 
         public IQueryable<T> GetAll() => _dbSet.AsQueryable();
+
+        public async Task<int> CountAllAsync() => await _dbSet.CountAsync();
 
         public async Task<T?> AddAsync(T entity)
         {

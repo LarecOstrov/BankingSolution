@@ -1,4 +1,5 @@
-﻿using Banking.Application.Services;
+﻿using Banking.Application.Services.Interfaces;
+using Banking.Domain.ValueObjects;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Banking.API.Controllers
@@ -7,29 +8,29 @@ namespace Banking.API.Controllers
     [Route("api/auth")]
     public class AuthController : ControllerBase
     {
-        private readonly AuthService _authService;
+        private readonly IAuthService _authService;
 
-        public AuthController(AuthService authService)
+        public AuthController(IAuthService authService)
         {
             _authService = authService;
         }
 
         [HttpPost("register")]
-        public async Task<IActionResult> Register(string fullName, string email, string password, string role)
+        public async Task<IActionResult> Register([FromBody] RegisterRequest rerquest)
         {
-            var success = await _authService.RegisterAsync(fullName, email, password, role);
-            return success ? Ok("User registered") : BadRequest("Registration failed");
+            var success = await _authService.RegisterAsync(rerquest);
+            return success ? Ok("User registered. Wait account verification.") : BadRequest("Registration failed");
         }
 
         [HttpPost("login")]
-        public async Task<IActionResult> Login(string email, string password)
+        public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
-            var token = await _authService.LoginAsync(email, password);
-            return token != null ? Ok(new { Token = token }) : Unauthorized();
+            var tokens = await _authService.LoginAsync(request);
+            return tokens != null ? Ok(tokens) : Unauthorized();
         }
 
         [HttpPost("refresh")]
-        public async Task<IActionResult> Refresh(string refreshToken)
+        public async Task<IActionResult> Refresh([FromBody] string refreshToken)
         {
             var newToken = await _authService.RefreshTokenAsync(refreshToken);
             return newToken != null ? Ok(new { Token = newToken }) : Unauthorized();

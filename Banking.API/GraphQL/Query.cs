@@ -6,7 +6,7 @@ using Serilog;
 
 namespace Banking.API.GraphQL
 {
-    [Authorize("Admin")]
+    //[Authorize("Admin")]
     public class Query
     {
         private readonly IAccountRepository _accountRepository;
@@ -33,6 +33,7 @@ namespace Banking.API.GraphQL
             _roleRepository = roleRepository;
         }
 
+        [GraphQLName("getAccounts")]
         [UsePaging(IncludeTotalCount = true, MaxPageSize = 25)]
         [UseProjection]
         [UseFiltering]
@@ -50,6 +51,7 @@ namespace Banking.API.GraphQL
             }
         }
 
+        [GraphQLName("getTransactions")]
         [UsePaging(IncludeTotalCount = true, MaxPageSize = 25)]
         [UseProjection]
         [UseFiltering]
@@ -67,6 +69,7 @@ namespace Banking.API.GraphQL
             }
         }
 
+        [GraphQLName("getUsers")]
         [UsePaging(IncludeTotalCount = true, MaxPageSize = 25)]
         [UseProjection]
         [UseFiltering]
@@ -84,6 +87,7 @@ namespace Banking.API.GraphQL
             }
         }
 
+        [GraphQLName("getFailedTransactions")]
         [UsePaging(IncludeTotalCount = true, MaxPageSize = 25)]
         [UseProjection]
         [UseFiltering]
@@ -101,6 +105,7 @@ namespace Banking.API.GraphQL
             }
         }
 
+        [GraphQLName("getBalanceHistories")]
         [UsePaging(IncludeTotalCount = true, MaxPageSize = 25)]
         [UseProjection]
         [UseFiltering]
@@ -118,6 +123,7 @@ namespace Banking.API.GraphQL
             }
         }
 
+        [GraphQLName("getRoles")]
         [UsePaging(IncludeTotalCount = true, MaxPageSize = 25)]
         [UseProjection]
         [UseFiltering]

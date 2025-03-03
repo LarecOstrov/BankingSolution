@@ -9,6 +9,7 @@ using Banking.Infrastructure.Messaging.Kafka;
 using Banking.Infrastructure.WebSockets;
 using Confluent.Kafka;
 using Serilog;
+using System.Linq.Expressions;
 using System.Text.Json;
 
 namespace Banking.Application.Services.Implementations;
@@ -57,34 +58,43 @@ public class TransactionService : ITransactionService
 
             using (var transaction = await _transactionRepository.BeginTransactionAsync())
             {
-                var transactionEntity = await _transactionRepository.GetByIdAsync(transactionObject.Id);
-                if (transactionEntity == null)
+                try
                 {
-                    Log.Error($"Transaction {transactionObject.Id} not found.");
-                    await transaction.RollbackAsync();                    
-                    return false;
-                }
+                    var transactionEntity = await _transactionRepository.GetByIdAsync(transactionObject.Id);
+                    if (transactionEntity == null)
+                    {
+                        Log.Error($"Transaction {transactionObject.Id} not found.");
+                        await transaction.RollbackAsync();
+                        return false;
+                    }
 
-                if (transactionEntity.Status != TransactionStatus.Pending)
-                {
-                    Log.Warning($"Transaction {transactionObject.Id} already processed.");
-                    return false;
-                }
+                    if (transactionEntity.Status != TransactionStatus.Pending)
+                    {
+                        Log.Warning($"Transaction {transactionObject.Id} already processed.");
+                        return false;
+                    }
 
-                var success = await ProcessTransactionInternal(transactionObject, transactionEntity);
-                if (!success)
-                {
-                    await transaction.RollbackAsync();
+                    var success = await ProcessTransactionInternal(transactionObject, transactionEntity);
+                    if (!success)
+                    {
+                        await transaction.RollbackAsync();
 
-                    transactionEntity.Status = TransactionStatus.Failed;
+                        transactionEntity.Status = TransactionStatus.Failed;
+                        await _transactionRepository.SaveChangesAsync();
+                        return true;
+                    }
+
+                    transactionEntity.Status = TransactionStatus.Completed;
                     await _transactionRepository.SaveChangesAsync();
+                    await transaction.CommitAsync();
                     return true;
                 }
-
-                transactionEntity.Status = TransactionStatus.Completed;
-                await _transactionRepository.SaveChangesAsync();
-                await transaction.CommitAsync();
-                return true;
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Error processing transaction");
+                    await transaction.RollbackAsync();
+                    return false;
+                }
             }
         }
         catch (Exception ex)

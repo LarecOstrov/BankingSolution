@@ -8,6 +8,7 @@
         public required LoggingOptions Logging { get; set; }
         public CorsOptions Cors { get; set; } = new CorsOptions();
         public required JwtOptions Jwt { get; set; }
+        public required BankInfo BankInfo { get; set; }
     }
 
     public class ConnectionStringsOptions
@@ -52,5 +53,13 @@
         public required string Issuer { get; set; }
         public required string Audience { get; set; }
         public required int ExpiryMinutes { get; set; }
+    }
+
+    public class BankInfo
+    {
+        public required string Name { get; set; }
+        public required string Country { get; set; }
+        public required string Code { get; set; }
+        public required int AccountLength { get; set; }
     }
 }

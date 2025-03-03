@@ -15,7 +15,7 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
 
-    // Load AppOptions from Common
+    // Load SolutionOptions from Infrustructure appsettings.json
     var appOptions = LoadSolutionOptionsHelper.LoadSolutionOptions(builder);
 
     ConfigureLogging(builder);
@@ -89,7 +89,7 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
     {
         redisOptions.Configuration = solutionOptions.Redis.Host;
         redisOptions.InstanceName = solutionOptions.Redis.InstanceName;
-    });    
+    });
 
     // Register repositories
     services.AddScoped<IAccountRepository, AccountRepository>();
@@ -97,6 +97,7 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
     services.AddScoped<IUserRepository, UserRepository>();
     services.AddScoped<IRoleRepository, RoleRepository>();
     services.AddScoped<IBalanceHistoryRepository, BalanceHistoryRepository>();
+    services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
     services.AddScoped<IFailedTransactionRepository, FailedTransactionRepository>();
 
     var corsOptions = solutionOptions.Cors;

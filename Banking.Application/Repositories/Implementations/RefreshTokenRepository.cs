@@ -11,7 +11,7 @@ namespace Banking.Application.Repositories.Implementations
         public RefreshTokenRepository(ApplicationDbContext dbContext) : base(dbContext) { }
 
         public async Task<RefreshTokenEntity?> GetByTokenAsync(string token) =>
-            await _dbContext.RefreshTokens.FirstOrDefaultAsync(t => t.Token == token);
+            await _dbContext.RefreshTokens.Include(t => t.User).ThenInclude(u => u.Role).FirstOrDefaultAsync(t => t.Token == token);
 
         public async Task DeleteAsync(string token)
         {

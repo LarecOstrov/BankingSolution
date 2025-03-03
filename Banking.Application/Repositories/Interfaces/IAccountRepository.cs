@@ -6,4 +6,5 @@ public interface IAccountRepository : IBaseRepository<AccountEntity>
 {
     Task<AccountEntity?> GetByAccountNumberAsync(string accountNumber);
     Task<AccountEntity?> GetByIdForUpdateWithLockAsync(Guid id);
+    Task<bool> ExistsAsync(string accountNumber);
 }
