@@ -9,6 +9,7 @@
         public CorsOptions Cors { get; set; } = new CorsOptions();
         public required JwtOptions Jwt { get; set; }
         public required BankInfo BankInfo { get; set; }
+        public required TransactionRetryPolicy TransactionRetryPolicy { get; set; }
     }
 
     public class ConnectionStringsOptions
@@ -61,5 +62,15 @@
         public required string Country { get; set; }
         public required string Code { get; set; }
         public required int AccountLength { get; set; }
+    }
+    //    "TransactionRetryPolicy": {
+    //      "MaxRetries": 3,
+    //      "DelayMiliseconds": 2000
+    //    },
+
+    public class TransactionRetryPolicy
+    {
+        public required int MaxRetries { get; set; } = 1;
+        public required int DelayMilliseconds { get; set; } = 1000;
     }
 }

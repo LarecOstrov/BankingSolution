@@ -59,8 +59,7 @@ public class PublishService : IPublishService
 
                 if (balance == null)
                 {
-                    Log.Warning($"Balance for account {transaction.FromAccountId} not found in cache");
-                    throw new Exception("Balance information not available");
+                    Log.Information($"Balance for account {transaction.FromAccountId} not found in cache");                    
                 }
 
                 if (balance < transaction.Amount)

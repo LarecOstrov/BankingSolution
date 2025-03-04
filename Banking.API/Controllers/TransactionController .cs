@@ -1,4 +1,5 @@
-﻿using Banking.Application.Services.Interfaces;
+﻿using Banking.Application.Repositories.Interfaces;
+using Banking.Application.Services.Interfaces;
 using Banking.Domain.Enums;
 using Banking.Domain.ValueObjects;
 using Microsoft.AspNetCore.Authorization;
@@ -14,8 +15,10 @@ namespace Banking.API.Controllers
         private readonly IPublishService _publishService;
         private readonly IAccountService _accountService;
         private readonly IAuthService _authService;
+        private readonly IUserRepository _userRepository;
 
         public TransactionController(
+            IUserRepository userRepository,
             IPublishService publishService,
             IAuthService authService,
             IAccountService accountService)
@@ -23,6 +26,7 @@ namespace Banking.API.Controllers
             _publishService = publishService;
             _authService = authService;
             _accountService = accountService;
+            _userRepository = userRepository;
         }
 
         /// <summary>
@@ -86,10 +90,19 @@ namespace Banking.API.Controllers
                     return Unauthorized("User ID not found in token.");
                 }
 
-                var isOwner = await _accountService.IsAccountOwnerAsync(request.FromAccountId, userId.Value);
-                if (!isOwner)
+                var user = await _userRepository.GetUserWithRoileById(userId.Value);
+                if (user == null)
                 {
-                    return Forbid("You can only transfer funds from your own account.");
+                    return NotFound("User not found.");
+                }
+
+                if (user.Role?.Name != "Admin")
+                {
+                    var isOwner = await _accountService.IsAccountOwnerAsync(request.FromAccountId, userId.Value);
+                    if (!isOwner)
+                    {
+                        return Forbid("You can only transfer funds from your own account.");
+                    }
                 }
 
                 return Accepted(await _publishService.PublishTransactionAsync(new Transaction(

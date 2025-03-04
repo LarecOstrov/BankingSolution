@@ -1,7 +1,7 @@
 x-environment: &common-environment
   ASPNETCORE_ENVIRONMENT: Development
-  SolutionOptions__Kafka__BootstrapServers: kafka:9092
-  SolutionOptions__Redis__Connection: redis:6379
+  SolutionOptions__Kafka__BootstrapServers: kafka:29092
+  SolutionOptions__Redis__Host: redis:6379
   SolutionOptions__ConnectionStrings__DefaultConnection: "Server=db;Database=BankingDB;User Id=sa;Password=BestBanking!2025;TrustServerCertificate=True"
 
 services:
@@ -93,8 +93,10 @@ services:
       KAFKA_CFG_ZOOKEEPER_CONNECT: "zookeeper:2181"
       KAFKA_CFG_BROKER_ID: 1
       ALLOW_PLAINTEXT_LISTENER: "yes"
-      KAFKA_CFG_LISTENERS: PLAINTEXT://0.0.0.0:9092
-      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_LISTENERS: PLAINTEXT://0.0.0.0:9092, PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_HOST://kafka:29092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_CFG_LOG_DIRS: /bitnami/kafka/data
       KAFKA_CFG_LOG_RETENTION_HOURS: 168
       KAFKA_CFG_LOG_SEGMENT_BYTES: 1073741824

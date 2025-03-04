@@ -10,6 +10,7 @@ using Banking.Infrastructure.WebSockets;
 using Confluent.Kafka;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
+using StackExchange.Redis;
 
 try
 {
@@ -85,11 +86,8 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
     services.AddScoped<ITransactionService, TransactionService>();
 
     // Redis configuration    
-    services.AddStackExchangeRedisCache(redisOptions =>
-    {
-        redisOptions.Configuration = solutionOptions.Redis.Host;
-        redisOptions.InstanceName = solutionOptions.Redis.InstanceName;
-    });
+
+    services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(solutionOptions.Redis.Host));    
 
     // Register repositories
     services.AddScoped<IAccountRepository, AccountRepository>();

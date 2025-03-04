@@ -1,6 +1,7 @@
 ﻿using Banking.Application.Repositories.Interfaces;
 using Banking.Infrastructure.Database;
 using Banking.Infrastructure.Database.Entities;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace Banking.Application.Repositories.Implementations;
@@ -15,7 +16,8 @@ public class AccountRepository : BaseRepository<AccountEntity>, IAccountReposito
     }
 
     public async Task<AccountEntity?> GetByIdForUpdateWithLockAsync(Guid id)
-        => await _dbContext.Accounts.FromSqlRaw($"SELECT * FROM Accounts WITH (UPDLOCK, ROWLOCK) WHERE Id = 'id'", id)
+        => await _dbContext.Accounts.FromSqlRaw("SELECT * FROM Accounts WITH (UPDLOCK, ROWLOCK) WHERE Id = @Id",
+                    new SqlParameter("@Id", id))
         .Include(a => a.User)
         .FirstOrDefaultAsync();
 

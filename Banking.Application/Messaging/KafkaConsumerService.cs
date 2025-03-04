@@ -49,21 +49,10 @@ public class KafkaConsumerService : BackgroundService
 
                 using var scope = _serviceScopeFactory.CreateScope();
                 var transactionService = scope.ServiceProvider.GetRequiredService<ITransactionService>();
-                var failedTransactionRepository = scope.ServiceProvider.GetRequiredService<IFailedTransactionRepository>();
+                
                 Log.Information($"Received transaction from Kafka: {consumeResult.Message.Value}");
 
-                bool success = await transactionService.ProcessTransactionAsync(consumeResult);
-
-                if (!success)
-                {
-                    Log.Error($"Transaction failed, saving to Database: {consumeResult.Message.Value}");
-                    var failedTransaction = new FailedTransactionEntity
-                    {
-                        TransactionMessage = consumeResult.Message.Value,
-                        Reason = "Declined by service",
-                    };
-                    await failedTransactionRepository.AddAsync(failedTransaction);
-                }
+                await transactionService.ProcessTransactionAsync(consumeResult);
             }
             catch (ConsumeException ex)
             {

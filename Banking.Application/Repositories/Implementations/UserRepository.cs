@@ -71,4 +71,11 @@ public class UserRepository : BaseRepository<UserEntity>, IUserRepository
         await _dbContext.SaveChangesAsync();
         return true;
     }
+
+    public async Task<UserEntity?> GetUserWithRoileById(Guid userId)
+    {        
+        return await _dbContext.Users
+            .Include(u => u.Role)
+            .FirstOrDefaultAsync(u => u.Id == userId);
+    }
 }
