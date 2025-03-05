@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using System.Security.Claims;
 using System.Text;
 
 namespace Banking.Infrastructure.Auth;
@@ -22,7 +23,8 @@ public static class AuthConfigurator
                     ValidateIssuerSigningKey = true,
                     ValidIssuer = solutionOptions.Jwt.Issuer,
                     ValidAudience = solutionOptions.Jwt.Audience,
-                    IssuerSigningKey = key
+                    IssuerSigningKey = key,
+                    RoleClaimType = ClaimTypes.Role
                 };
             });
 

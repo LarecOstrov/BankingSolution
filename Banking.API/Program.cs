@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Prometheus;
 using Serilog;
+using StackExchange.Redis;
 
 
 try
@@ -84,10 +85,13 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
 
     // Add Controllers
     services.AddControllers();
-        //.AddJsonOptions(options =>
-        //{
-        //    options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.Preserve;
-        //});
+    //.AddJsonOptions(options =>
+    //{
+    //    options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.Preserve;
+    //});
+
+    // Redis configuration
+    services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(solutionOptions.Redis.Host));
 
     // Repositories
     services.AddScoped<IAccountRepository, AccountRepository>();

@@ -25,8 +25,15 @@ namespace Banking.API.Controllers
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
-            var tokens = await _authService.LoginAsync(request);
-            return tokens != null ? Ok(tokens) : Unauthorized();
+            try
+            {
+                var tokens = await _authService.LoginAsync(request);
+                return tokens != null ? Ok(tokens) : Unauthorized();
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
 
         [HttpPost("refresh")]

@@ -6,7 +6,7 @@ using Serilog;
 
 namespace Banking.API.GraphQL
 {
-    //[Authorize("Admin")]
+    [Authorize(Roles = new[] { "Admin" })]
     public class Query
     {
         private readonly IAccountRepository _accountRepository;

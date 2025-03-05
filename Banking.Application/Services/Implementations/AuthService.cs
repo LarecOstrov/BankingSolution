@@ -48,10 +48,10 @@ public class AuthService : IAuthService
     {
         var user = await _userRepository.GetUserByEmailAsync(request.Email);
         if (user == null || !VerifyPassword(request.Password, user.PasswordHash))
-            return null;
+            throw new Exception("Invalid email or password");
 
         if (!user.Confirmed)
-            return null;
+            throw new Exception("User not confirmed");
 
         var refreshToken = new RefreshTokenEntity
         {
@@ -62,7 +62,8 @@ public class AuthService : IAuthService
         };
 
         var result = await _refreshTokenRepository.AddAsync(refreshToken);
-        if (result == null) return null;
+        if (result == null)
+            throw new Exception("Failed to generate refresh token");
 
         var accessToken = GenerateJwtToken(user);
 
