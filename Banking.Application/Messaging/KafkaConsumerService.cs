@@ -2,6 +2,7 @@
 using Banking.Application.Services.Interfaces;
 using Banking.Infrastructure.Config;
 using Banking.Infrastructure.Database.Entities;
+using Banking.Infrastructure.Messaging.Kafka;
 using Confluent.Kafka;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -27,6 +28,11 @@ public class KafkaConsumerService : BackgroundService
             .Build();
     }
 
+    /// <summary>
+    /// Executes the background service
+    /// </summary>
+    /// <param name="stoppingToken"></param>
+    /// <returns>Task</returns>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
 
@@ -35,60 +41,49 @@ public class KafkaConsumerService : BackgroundService
             BootstrapServers = _solutionOptions.Kafka.BootstrapServers
         }).Build())
         {
-            await WaitForTopicAsync(_solutionOptions.Kafka.TransactionsTopic, adminClient);
+            await KafkaHelper.WaitForTopicAsync(_solutionOptions.Kafka.TransactionsTopic, adminClient);
         }
 
         _consumer.Subscribe(_solutionOptions.Kafka.TransactionsTopic);
-
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
+        try
+        {          
+            while (!stoppingToken.IsCancellationRequested)
             {
-                var consumeResult = _consumer.Consume(stoppingToken);
-                if (consumeResult == null) continue;
-
-                using var scope = _serviceScopeFactory.CreateScope();
-                var transactionService = scope.ServiceProvider.GetRequiredService<ITransactionService>();
-                
-                Log.Information($"Received transaction from Kafka: {consumeResult.Message.Value}");
-
-                await transactionService.ProcessTransactionAsync(consumeResult);
-            }
-            catch (ConsumeException ex)
-            {
-                Log.Error($"Kafka consume error: {ex.Error.Reason}");
-                await Task.Delay(5000, stoppingToken);
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"General error in KafkaConsumerService: {ex.Message}");
-            }
-        }
-
-        _consumer.Close();
-    }
-
-    private async Task WaitForTopicAsync(string topic, IAdminClient adminClient)
-    {
-        Log.Information($"Kafka start wait for topic {topic}");
-        while (true)
-        {
-            try
-            {
-                var metadata = adminClient.GetMetadata(TimeSpan.FromSeconds(5));
-                if (metadata.Topics.Any(t => t.Topic == topic))
+                try
                 {
-                    Log.Information($"Topic {topic} is available.");
-                    return;
+                    var consumeResult = _consumer.Consume(stoppingToken);
+                    if (consumeResult == null) continue;
+
+                    using var scope = _serviceScopeFactory.CreateScope();
+                    var transactionService = scope.ServiceProvider.GetRequiredService<ITransactionService>();
+                
+                    Log.Information($"Received transaction from Kafka: {consumeResult.Message.Value}");
+
+                    await transactionService.ProcessTransactionAsync(consumeResult);
+
+                    _consumer.Commit(consumeResult);
+                }
+                catch (ConsumeException ex)
+                {
+                    _consumer.Commit();
+                    Log.Error($"Kafka consume error: {ex.Error.Reason}");
+                    await Task.Delay(1000, stoppingToken);
+                }
+                catch (Exception ex)
+                {
+                    _consumer.Commit();
+                    Log.Error($"General error in KafkaConsumerService: {ex.Message}");
                 }
             }
-            catch (Exception ex)
-            {
-                Log.Error($"Waiting for topic {topic}: {ex.Message}");
-                await Task.Delay(5000);
-                continue;
-            }
         }
-    }
+        catch (OperationCanceledException)
+        {
+            Log.Information("KafkaConsumerService is stopping...");
+        }
+        finally
+        {
+            _consumer.Close();
+        }
+    } 
 
 }

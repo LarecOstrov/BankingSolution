@@ -24,7 +24,7 @@ public class TransactionService : ITransactionService
     private readonly IBalanceHistoryRepository _balanceHistoryRepository;
     private readonly IRedisCacheService _redisCacheService;
     private readonly IAccountRepository _accountRepository;
-    private readonly WebSocketService _webSocketService;
+    private readonly IPublishService _publishService;
     private readonly SolutionOptions _solutionOptions;
     private readonly int _maxRetries;
     private readonly int _delayMilliseconds;
@@ -35,7 +35,7 @@ public class TransactionService : ITransactionService
         IBalanceHistoryRepository balanceHistoryRepository,
         IAccountRepository accountRepository,
         IRedisCacheService redisCacheService,
-        WebSocketService webSocketService,
+        IPublishService publishService,
         IOptions<SolutionOptions> solutionOptions)
     {
         _transactionRepository = transactionRepository;
@@ -43,23 +43,13 @@ public class TransactionService : ITransactionService
         _balanceHistoryRepository = balanceHistoryRepository;
         _accountRepository = accountRepository;
         _redisCacheService = redisCacheService;
-        _webSocketService = webSocketService;
+        _publishService = publishService;
         _solutionOptions = solutionOptions.Value;
         _maxRetries = _solutionOptions.TransactionRetryPolicy.MaxRetries;
         _delayMilliseconds = _solutionOptions.TransactionRetryPolicy.DelayMilliseconds;
 
     }
-    /// <summary>
-    /// Get the transaction by Id
-    /// </summary>
-    /// <param name="transactionId"></param>
-    /// <returns>The Transaction object</returns>
-    public async Task<Transaction?> GetTransactionByIdAsync(Guid transactionId)
-    {
-        var entity = await _transactionRepository.GetByIdAsync(transactionId);
-        return entity?.ToDomain();
-    }
-
+    
     /// <summary>
     /// Process the transaction from Queue
     /// </summary>
@@ -146,7 +136,12 @@ public class TransactionService : ITransactionService
             return false;
         }
     }
-
+    /// <summary>
+    /// Save the failed transaction
+    /// </summary>
+    /// <param name="transactionMessage"></param>
+    /// <param name="reason"></param>
+    /// <returns>Task</returns>
     private async Task SaveFailedTransaction(string? transactionMessage, string reason)
     {
         try
@@ -234,18 +229,19 @@ public class TransactionService : ITransactionService
             await SaveBalanceHistory(toAccount, transactionObject.Id);
         }
 
-        await NotifyUsers(fromAccount, toAccount, transactionObject.Amount);
+        await _publishService.PublishTransactionNotificationAsync(FromTransactionData(fromAccount, toAccount, transactionObject.Amount));
 
         return true;
     }
 
 
+    #region Private Methods
     /// <summary>
     /// Save the balance history for the account
     /// </summary>
     /// <param name="account"></param>
     /// <param name="transactionId"></param>
-    /// <returns>The task</returns>
+    /// <returns>Task</returns>
     private async Task SaveBalanceHistory(AccountEntity? account, Guid transactionId)
     {
         if (account == null) return;
@@ -262,45 +258,39 @@ public class TransactionService : ITransactionService
     }
 
     /// <summary>
+    /// Create a TransactionNotificationEvent from the transaction data
+    /// </summary>
+    /// <param name="fromAccount"></param>
+    /// <param name="toAccount"></param>
+    /// <param name="amount"></param>
+    /// <returns></returns>
+    private static TransactionNotificationEvent FromTransactionData(AccountEntity? fromAccount, AccountEntity? toAccount, decimal amount)
+    {
+        return new TransactionNotificationEvent
+        {
+            FromUserId = fromAccount?.UserId,
+            ToUserId = toAccount?.UserId,
+            Amount = amount,
+            FromAccountNumber = fromAccount?.AccountNumber,
+            ToAccountNumber = toAccount?.AccountNumber,
+            FromUserName = fromAccount?.User?.FullName,
+            ToUserName = toAccount?.User?.FullName,
+            FromAccountBalance = fromAccount?.Balance,
+            ToAccountBalance = toAccount?.Balance,
+            Timestamp = DateTime.UtcNow
+        };
+    }
+
+    /// <summary>
     /// Notify the users about the transaction
     /// </summary>
     /// <param name="fromAccount"></param>
     /// <param name="toAccount"></param>
     /// <param name="amount"></param>
-    /// <returns>The task</returns>
-    private async Task NotifyUsers(AccountEntity? fromAccount, AccountEntity? toAccount, decimal amount)
-    {
-        if (fromAccount != null)
-        {
-            if (toAccount != null)
-            {
-                await _webSocketService.SendTransactionNotificationAsync(
-                    fromAccount.User.Id, $"You sent {amount} to account {toAccount?.User.FullName}." +
-                    $" Current balance is {fromAccount?.Balance}.");
-            }
-            else
-            {
-                await _webSocketService.SendTransactionNotificationAsync(
-                    fromAccount.User.Id, $"Withdrawal of {amount} from account {fromAccount?.AccountNumber}." +
-                    $" Current balance is {fromAccount?.Balance}.");
-            }
-        }
+    /// <returns>Task</returns>
 
-        if (toAccount != null)
-        {
-            if (fromAccount != null)
-            {
-                await _webSocketService.SendTransactionNotificationAsync(
-                toAccount.User.Id, $"You received {amount} from account {fromAccount?.User.FullName}." +
-                $" Current balance is {toAccount?.Balance}.");
-            }
-            else
-            {
-                await _webSocketService.SendTransactionNotificationAsync(
-                toAccount.User.Id, $"Your account {toAccount?.AccountNumber} funds received {amount}." +
-                $" Current balance is {toAccount?.Balance}!");
-            }
-        }
-    }
+    #endregion
+
+    
 }
 

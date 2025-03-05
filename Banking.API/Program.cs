@@ -70,28 +70,19 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
     services.AddDbContext<ApplicationDbContext>(dbOptions =>
         dbOptions.UseSqlServer(solutionOptions.ConnectionStrings.DefaultConnection));
 
-    // Kaffka Producer
-    var kafkaConfig = new ProducerConfig 
-    { 
-        BootstrapServers = solutionOptions.Kafka.BootstrapServers,
-        Acks = Acks.All,
-        EnableIdempotence = true,
-        MessageSendMaxRetries = int.MaxValue,
-        LingerMs = 2,
-        BatchSize = 32 * 1024
-    };
-    services.AddSingleton<ProducerConfig>(kafkaConfig);
-    services.AddSingleton<IKafkaProducer, KafkaProducer>();
+    ConfigureMessagingAsync(services, solutionOptions);
 
-    // Add Controllers
-    services.AddControllers();
-    //.AddJsonOptions(options =>
-    //{
-    //    options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.Preserve;
-    //});
+    // Services
+    services.AddControllers();    
+    services.AddSingleton<WebSocketService>();
+    services.AddScoped<IPublishService, PublishService>();
+    services.AddScoped<ITransactionService, TransactionService>();
+    services.AddScoped<IAccountService, AccountService>();
+    services.AddScoped<IAuthService, AuthService>();
 
     // Redis configuration
     services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(solutionOptions.Redis.Host));
+    services.AddScoped<IRedisCacheService, RedisCacheService>();
 
     // Repositories
     services.AddScoped<IAccountRepository, AccountRepository>();
@@ -101,16 +92,6 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
     services.AddScoped<IBalanceHistoryRepository, BalanceHistoryRepository>();
     services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
     services.AddScoped<IFailedTransactionRepository, FailedTransactionRepository>();
-
-
-
-    // Services
-    services.AddSingleton<WebSocketService>();
-    services.AddScoped<IPublishService, PublishService>();
-    services.AddScoped<ITransactionService, TransactionService>();
-    services.AddScoped<IAccountService, AccountService>();
-    services.AddScoped<IAuthService, AuthService>();
-    services.AddScoped<IRedisCacheService, RedisCacheService>();
 
     // GraphQL
     services.AddGraphQLServer()
@@ -126,15 +107,7 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
     services.AddScoped<Query>();
     services.AddAuthorization();
     services.AddValidation();
-
-
-    // Redis configuration
-    services.AddStackExchangeRedisCache(redisOptions =>
-    {
-        redisOptions.Configuration = solutionOptions.Redis.Host;
-        redisOptions.InstanceName = solutionOptions.Redis.InstanceName;
-    });
-
+    
     // CORS Configuration
     var corsOptions = solutionOptions.Cors;
     services.AddCors(options =>
@@ -153,6 +126,42 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
                 builder => builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
         }
     });
+}
+
+void ConfigureMessagingAsync(IServiceCollection services, SolutionOptions solutionOptions)
+{
+    Log.Information($"Connection Kafka BootstrapServers: {solutionOptions.Kafka.BootstrapServers}");
+    Log.Information($"Consumer Kafka ConsumerGroup: {solutionOptions.Kafka.ConsumerGroup}");
+
+    // Kaffka configuration
+    // Producer
+    var kafkaProducerConfig = new ProducerConfig
+    {
+        BootstrapServers = solutionOptions.Kafka.BootstrapServers,
+        Acks = Acks.All,
+        EnableIdempotence = true,
+        MessageSendMaxRetries = int.MaxValue,
+        LingerMs = 2,
+        BatchSize = 32 * 1024
+    };
+
+    // Consumer
+    var kafkaConsumerNotificationConfig = new ConsumerConfig
+    {
+        BootstrapServers = solutionOptions.Kafka.BootstrapServers,
+        GroupId = solutionOptions.Kafka.ConsumerGroup,
+        AutoOffsetReset = AutoOffsetReset.Earliest,
+        EnableAutoCommit = false,
+        IsolationLevel = IsolationLevel.ReadCommitted,
+        AllowAutoCreateTopics = true
+    };
+
+    // Services
+    services.AddControllers();
+    services.AddSingleton<ProducerConfig>(kafkaProducerConfig);
+    services.AddSingleton<IKafkaProducer, KafkaProducer>();
+    services.AddSingleton(kafkaConsumerNotificationConfig);
+    services.AddHostedService<KafkaNotificationConsumerService>();
 }
 
 /// <summary>

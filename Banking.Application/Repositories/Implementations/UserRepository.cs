@@ -72,6 +72,11 @@ public class UserRepository : BaseRepository<UserEntity>, IUserRepository
         return true;
     }
 
+    /// <summary>
+    /// Get a user with role by Id
+    /// </summary>
+    /// <param name="userId"></param>
+    /// <returns>Taks of UserEntity</returns>
     public async Task<UserEntity?> GetUserWithRoileById(Guid userId)
     {        
         return await _dbContext.Users

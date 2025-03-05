@@ -6,6 +6,7 @@ using Banking.Application.Services.Interfaces;
 using Banking.Infrastructure.Caching;
 using Banking.Infrastructure.Config;
 using Banking.Infrastructure.Database;
+using Banking.Infrastructure.Messaging.Kafka;
 using Banking.Infrastructure.WebSockets;
 using Confluent.Kafka;
 using Microsoft.EntityFrameworkCore;
@@ -63,31 +64,16 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
     services.AddDbContext<ApplicationDbContext>(dbOptions =>
         dbOptions.UseSqlServer(solutionOptions.ConnectionStrings.DefaultConnection));
 
-    Log.Information($"Connection Kafka BootstrapServers: {solutionOptions.Kafka.BootstrapServers}");
-    Log.Information($"Consumer Kafka ConsumerGroup: {solutionOptions.Kafka.ConsumerGroup}");
-
-    //  Kafka configuration
-    var kafkaConfig = new ConsumerConfig
-    {
-        BootstrapServers = solutionOptions.Kafka.BootstrapServers,
-        GroupId = solutionOptions.Kafka.ConsumerGroup,
-        AutoOffsetReset = AutoOffsetReset.Earliest,
-        EnableAutoCommit = false,
-        IsolationLevel = IsolationLevel.ReadCommitted,
-        AllowAutoCreateTopics = true
-    };
+    ConfigureMessagingAsync(services, solutionOptions);
 
     // Services
-    services.AddControllers();
-    services.AddSingleton(kafkaConfig);
-    services.AddHostedService<KafkaConsumerService>();
-    services.AddSingleton<WebSocketService>();
-    services.AddScoped<IRedisCacheService, RedisCacheService>();
+    services.AddControllers();   
+    services.AddScoped<IPublishService, PublishService>();
     services.AddScoped<ITransactionService, TransactionService>();
 
     // Redis configuration    
-
-    services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(solutionOptions.Redis.Host));    
+    services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(solutionOptions.Redis.Host));
+    services.AddScoped<IRedisCacheService, RedisCacheService>();   
 
     // Register repositories
     services.AddScoped<IAccountRepository, AccountRepository>();
@@ -125,4 +111,40 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
                 .WithHeaders("Sec-WebSocket-Version", "Sec-WebSocket-Key", "Upgrade", "Connection"));
         }
     });
+}
+
+void ConfigureMessagingAsync(IServiceCollection services, SolutionOptions solutionOptions)
+{   
+
+    Log.Information($"Connection Kafka BootstrapServers: {solutionOptions.Kafka.BootstrapServers}");
+    Log.Information($"Consumer Kafka ConsumerGroup: {solutionOptions.Kafka.ConsumerGroup}");
+
+    //Kafka configuration
+    // Producer
+    var kafkaProducerConfig = new ProducerConfig
+    {
+        BootstrapServers = solutionOptions.Kafka.BootstrapServers,
+        Acks = Acks.All,
+        EnableIdempotence = true,
+        MessageSendMaxRetries = int.MaxValue,
+        LingerMs = 2,
+        BatchSize = 32 * 1024
+    };
+
+    // Consumer
+    var kafkaTransactionConsumerConfig = new ConsumerConfig
+    {
+        BootstrapServers = solutionOptions.Kafka.BootstrapServers,
+        GroupId = solutionOptions.Kafka.ConsumerGroup,
+        AutoOffsetReset = AutoOffsetReset.Earliest,
+        EnableAutoCommit = false,
+        IsolationLevel = IsolationLevel.ReadCommitted,
+        AllowAutoCreateTopics = true
+    };
+
+    // Services   
+    services.AddSingleton<ProducerConfig>(kafkaProducerConfig);
+    services.AddSingleton<IKafkaProducer, KafkaProducer>();
+    services.AddSingleton(kafkaTransactionConsumerConfig);
+    services.AddHostedService<KafkaConsumerService>();
 }

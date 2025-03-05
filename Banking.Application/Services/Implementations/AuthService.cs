@@ -165,8 +165,47 @@ public class AuthService : IAuthService
         return Guid.TryParse(userIdClaim, out var userId) ? userId : null;
     }
 
+    public ClaimsPrincipal? ValidateJwtToken(string? token)
+    {
+        if (string.IsNullOrEmpty(token))
+            return null;
+
+        var tokenHandler = new JwtSecurityTokenHandler();
+        
+        var validationParams = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = _issuer,
+
+            ValidateAudience = true,
+            ValidAudience = _audience,
+
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSecretKey)),
+
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.Zero
+        };
+
+        try
+        {
+            var principal = tokenHandler.ValidateToken(token, validationParams, out var validatedToken);
+            return principal;
+        }
+        catch
+        {            
+            return null;
+        }
+    }
+
 
     #region Private
+    /// <summary>
+    /// Generate JWT token
+    /// </summary>
+    /// <param name="user"></param>
+    /// <returns>string token</returns>
+    /// <exception cref="Exception"></exception>
     private string GenerateJwtToken(UserEntity user)
     {
         if (user.Role == null) throw new Exception("User role not found");
@@ -191,12 +230,23 @@ public class AuthService : IAuthService
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
+    /// <summary>
+    /// Hash password
+    /// </summary>
+    /// <param name="password"></param>
+    /// <returns>string hash</returns>
     private static string HashPassword(string password)
     {
         using var sha256 = SHA256.Create();
         return Convert.ToBase64String(sha256.ComputeHash(Encoding.UTF8.GetBytes(password)));
     }
 
+    /// <summary>
+    /// Verify password
+    /// </summary>
+    /// <param name="password"></param>
+    /// <param name="storedHash"></param>
+    /// <returns>Boolean indicates if password is valid</returns>
     private static bool VerifyPassword(string password, string storedHash)
     {
         return HashPassword(password) == storedHash;

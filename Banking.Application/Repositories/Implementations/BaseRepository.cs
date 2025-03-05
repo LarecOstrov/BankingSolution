@@ -16,17 +16,39 @@ namespace Banking.Application.Repositories.Implementations
             _dbSet = dbContext.Set<T>();
         }
 
+        /// <summary>
+        /// Begin a transaction
+        /// </summary>
+        /// <returns>Task of IDbContextTransaction</returns>
         public async Task<IDbContextTransaction> BeginTransactionAsync()
         {
             return await _dbContext.Database.BeginTransactionAsync();
         }
 
+        /// <summary>
+        /// Get an entity by Id
+        /// </summary>
+        /// <param name="id"></param>
+        /// <returns>Task of T</returns>
         public async Task<T?> GetByIdAsync(Guid id) => await _dbSet.FindAsync(id);
 
+        /// <summary>
+        /// Get all entities
+        /// </summary>
+        /// <returns>IQueryable of T</returns>
         public IQueryable<T> GetAll() => _dbSet.AsQueryable();
 
+        /// <summary>
+        /// Count all entities asynchronously
+        /// </summary>
+        /// <returns>Task of int</returns>
         public async Task<int> CountAllAsync() => await _dbSet.CountAsync();
 
+        /// <summary>
+        /// Add an entity
+        /// </summary>
+        /// <param name="entity"></param>
+        /// <returns>Task of T</returns>
         public async Task<T?> AddAsync(T entity)
         {
             await _dbSet.AddAsync(entity);
@@ -37,6 +59,11 @@ namespace Banking.Application.Repositories.Implementations
             return null;
         }
 
+        /// <summary>
+        /// Update an entity
+        /// </summary>
+        /// <param name="entity"></param>
+        /// <returns>Task of bool</returns>
         public async Task<bool> UpdateAsync(T entity)
         {
             _dbSet.Update(entity);
@@ -44,6 +71,11 @@ namespace Banking.Application.Repositories.Implementations
             return await _dbContext.SaveChangesAsync() > 0;
         }
 
+        /// <summary>
+        /// Delete an entity
+        /// </summary>
+        /// <param name="id"></param>
+        /// <returns>Taks of bool</returns>
         public async Task<bool> DeleteAsync(Guid id)
         {
             var entity = await GetByIdAsync(id);
@@ -55,6 +87,10 @@ namespace Banking.Application.Repositories.Implementations
             return false;
         }
 
+        /// <summary>
+        /// Save changes asynchronously
+        /// </summary>
+        /// <returns>Taks of bool</returns>
         public async Task<bool> SaveChangesAsync()
         {
             return await _dbContext.SaveChangesAsync() > 0;

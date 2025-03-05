@@ -11,6 +11,11 @@ public class RedisCacheService : IRedisCacheService
         _cache = redis.GetDatabase();
     }
 
+    /// <summary>
+    /// Get balance from cache
+    /// </summary>
+    /// <param name="accountId"></param>
+    /// <returns>decimal balance</returns>
     public async Task<decimal?> GetBalanceAsync(Guid accountId)
     {
         var balanceKey = $"balance_{accountId}";
@@ -19,6 +24,12 @@ public class RedisCacheService : IRedisCacheService
         return balanceString.HasValue ? JsonSerializer.Deserialize<decimal>(balanceString.ToString()) : null;
     }
 
+    /// <summary>
+    /// Update balance in cache
+    /// </summary>
+    /// <param name="accountId"></param>
+    /// <param name="newBalance"></param>
+    /// <returns>Task</returns>
     public async Task UpdateBalanceAsync(Guid accountId, decimal newBalance)
     {
         var balanceKey = $"balance_{accountId}";

@@ -15,6 +15,11 @@ namespace Banking.API.Controllers
             _authService = authService;
         }
 
+        /// <summary>
+        /// Register new user
+        /// </summary>
+        /// <param name="rerquest"></param>
+        /// <returns>IActionResult</returns>
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterRequest rerquest)
         {
@@ -22,6 +27,11 @@ namespace Banking.API.Controllers
             return success ? Ok("User registered. Wait account verification.") : BadRequest("Registration failed");
         }
 
+        /// <summary>
+        /// Login user
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns>IActionResult</returns>
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
@@ -36,6 +46,11 @@ namespace Banking.API.Controllers
             }
         }
 
+        /// <summary>
+        /// Refresh token
+        /// </summary>
+        /// <param name="refreshToken"></param>
+        /// <returns>IActionResult</returns>
         [HttpPost("refresh")]
         public async Task<IActionResult> Refresh([FromBody] string refreshToken)
         {

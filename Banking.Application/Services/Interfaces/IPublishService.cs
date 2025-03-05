@@ -4,5 +4,6 @@ namespace Banking.Application.Services.Interfaces;
 
 public interface IPublishService
 {
-    public Task<Transaction> PublishTransactionAsync(Transaction transaction);
+    Task<Transaction> PublishTransactionAsync(Transaction transaction);
+    Task PublishTransactionNotificationAsync(TransactionNotificationEvent notificationEvent);
 }

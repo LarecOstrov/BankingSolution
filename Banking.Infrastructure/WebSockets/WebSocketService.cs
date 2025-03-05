@@ -10,6 +10,12 @@ namespace Banking.Infrastructure.WebSockets
 
         public WebSocketService() { }
 
+        /// <summary>
+        ///  Handle WebSocket connection
+        /// </summary>
+        /// <param name="userId"></param>
+        /// <param name="webSocket"></param>
+        /// <returns>Task</returns>
         public async Task HandleWebSocketAsync(Guid userId, WebSocket webSocket)
         {
             Log.Information($"User {userId} connected via WebSocket");
@@ -34,17 +40,37 @@ namespace Banking.Infrastructure.WebSockets
             }
         }
 
+        /// <summary>
+        /// Send transaction notification to user
+        /// </summary>
+        /// <param name="userId"></param>
+        /// <param name="message"></param>
+        /// <returns>Task</returns>
         public async Task SendTransactionNotificationAsync(Guid userId, string message)
         {
-            if (_connections.TryGetValue(userId, out var webSocket) && webSocket.State == WebSocketState.Open)
+            var retries = 0;
+            var maxRetries = 3;
+            while (retries < maxRetries)
             {
-                var bytes = Encoding.UTF8.GetBytes(message);
-                await webSocket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None);
-                Log.Information($"Sent WebSocket message to user {userId}: {message}");
-            }
-            else
-            {
-                Log.Warning($"User {userId} is not connected via WebSocket.");
+                try
+                {
+                    if (_connections.TryGetValue(userId, out var webSocket) && webSocket.State == WebSocketState.Open)
+                    {
+                        var bytes = Encoding.UTF8.GetBytes(message);
+                        await webSocket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None);
+                        Log.Information($"Sent WebSocket message to user {userId}: {message}");
+                    }
+                    else
+                    {
+                        Log.Warning($"User {userId} is not connected via WebSocket.");
+                    }
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, $"Error sending WebSocket message to user {userId}");
+                    retries++;
+                }
             }
         }
     }
