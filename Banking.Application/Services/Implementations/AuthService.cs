@@ -24,6 +24,7 @@ public class AuthService : IAuthService
     private readonly string _jwtSecretKey;
     private readonly string _issuer;
     private readonly string _audience;
+    private readonly int _expiryMinutes;
     private readonly SolutionOptions _solutionOptions;
 
     public AuthService(IUserRepository userRepository,
@@ -42,6 +43,7 @@ public class AuthService : IAuthService
         _jwtSecretKey = _solutionOptions.Jwt.SecretKey;
         _issuer = _solutionOptions.Jwt.Issuer;
         _audience = _solutionOptions.Jwt.Audience;
+        _expiryMinutes = _solutionOptions.Jwt.ExpiryMinutes;
     }
 
     public async Task<LoginResponse?> LoginAsync(LoginRequest request)
@@ -223,7 +225,7 @@ public class AuthService : IAuthService
             _issuer,
             _audience,
             claims,
-            expires: DateTime.UtcNow.AddMinutes(60),
+            expires: DateTime.UtcNow.AddMinutes(_expiryMinutes),
             signingCredentials: credentials
         );
 

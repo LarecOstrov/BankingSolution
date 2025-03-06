@@ -67,7 +67,11 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
     ConfigureMessagingAsync(services, solutionOptions);
 
     // Services
-    services.AddControllers();   
+    services.AddControllers()
+        .AddJsonOptions(options =>
+        {
+            options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.Preserve;
+        });   
     services.AddScoped<IPublishService, PublishService>();
     services.AddScoped<ITransactionService, TransactionService>();
 
@@ -137,7 +141,7 @@ void ConfigureMessagingAsync(IServiceCollection services, SolutionOptions soluti
         BootstrapServers = solutionOptions.Kafka.BootstrapServers,
         GroupId = solutionOptions.Kafka.ConsumerGroup,
         AutoOffsetReset = AutoOffsetReset.Earliest,
-        EnableAutoCommit = false,
+        EnableAutoCommit = true,
         IsolationLevel = IsolationLevel.ReadCommitted,
         AllowAutoCreateTopics = true
     };
@@ -146,5 +150,5 @@ void ConfigureMessagingAsync(IServiceCollection services, SolutionOptions soluti
     services.AddSingleton<ProducerConfig>(kafkaProducerConfig);
     services.AddSingleton<IKafkaProducer, KafkaProducer>();
     services.AddSingleton(kafkaTransactionConsumerConfig);
-    services.AddHostedService<KafkaConsumerService>();
+    services.AddHostedService<KafkaConsumerService>();    
 }

@@ -40,7 +40,11 @@ services:
     - "8082:8082"
     - "8083:8083"
     depends_on:
-      api:
+      db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     environment:
      <<: *common-environment 
@@ -112,6 +116,7 @@ services:
       interval: 20s
       retries: 5
       timeout: 10s
+      start_period: 30s 
 
   zookeeper:
     image: "bitnami/zookeeper:latest"
@@ -129,6 +134,7 @@ services:
       interval: 10s
       retries: 5
       timeout: 5s
+      start_period: 30s 
 
 
 volumes:

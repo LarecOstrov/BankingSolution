@@ -73,7 +73,11 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
     ConfigureMessagingAsync(services, solutionOptions);
 
     // Services
-    services.AddControllers();    
+    services.AddControllers()
+        .AddJsonOptions(options =>
+        {
+            options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.Preserve;
+        });    
     services.AddSingleton<WebSocketService>();
     services.AddScoped<IPublishService, PublishService>();
     services.AddScoped<ITransactionService, TransactionService>();
@@ -151,7 +155,7 @@ void ConfigureMessagingAsync(IServiceCollection services, SolutionOptions soluti
         BootstrapServers = solutionOptions.Kafka.BootstrapServers,
         GroupId = solutionOptions.Kafka.ConsumerGroup,
         AutoOffsetReset = AutoOffsetReset.Earliest,
-        EnableAutoCommit = false,
+        EnableAutoCommit = true,
         IsolationLevel = IsolationLevel.ReadCommitted,
         AllowAutoCreateTopics = true
     };
@@ -159,8 +163,8 @@ void ConfigureMessagingAsync(IServiceCollection services, SolutionOptions soluti
     // Services
     services.AddControllers();
     services.AddSingleton<ProducerConfig>(kafkaProducerConfig);
-    services.AddSingleton<IKafkaProducer, KafkaProducer>();
-    services.AddSingleton(kafkaConsumerNotificationConfig);
+    services.AddSingleton<IKafkaProducer, KafkaProducer>();    
+    services.AddSingleton(kafkaConsumerNotificationConfig);    
     services.AddHostedService<KafkaNotificationConsumerService>();
 }
 

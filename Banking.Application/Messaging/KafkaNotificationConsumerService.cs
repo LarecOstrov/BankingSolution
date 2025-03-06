@@ -26,60 +26,71 @@ public class KafkaNotificationConsumerService : BackgroundService
             .Build();
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using (var adminClient = new AdminClientBuilder(new AdminClientConfig
+        return Task.Run(async () =>
         {
-            BootstrapServers = _solutionOptions.Kafka.BootstrapServers
-        }).Build())
-        {
-            await KafkaHelper.WaitForTopicAsync(_solutionOptions.Kafka.NotificationsTopic, adminClient);
-        }
-
-        _consumer.Subscribe(_solutionOptions.Kafka.NotificationsTopic);
-
-        Log.Information($"KafkaNotificationConsumerService subscribed to {_solutionOptions.Kafka.NotificationsTopic}");
-
-        try
-        {
-            while (!stoppingToken.IsCancellationRequested)
+            try
             {
-                try
-                {
-                    var consumeResult = _consumer.Consume(stoppingToken);
-                    if (consumeResult == null) continue;
+                await KafkaHelper.CreateKafkaTopicAsync(
+                    _solutionOptions.Kafka.BootstrapServers,
+                    _solutionOptions.Kafka.NotificationsTopic);
 
-                    Log.Information("Received notification from Kafka: {Value}", consumeResult.Message.Value);
-
-                    var notification = JsonSerializer.Deserialize<TransactionNotificationEvent>(consumeResult.Message.Value);
-                    if (notification != null)
-                    {
-                        await NotifyUsersAsync(notification);
-                    }
-
-                    _consumer.Commit(consumeResult);
-                }
-                catch (ConsumeException ex)
+                using var adminClient = new AdminClientBuilder(new AdminClientConfig
                 {
-                    _consumer.Commit();
-                    Log.Error($"Kafka consume notification error: {ex.Error.Reason}");
-                    await Task.Delay(1000, stoppingToken);
-                }
-                catch (Exception ex)
-                {
-                    _consumer.Commit();
-                    Log.Error($"General error in KafkaNotificationConsumerService: {ex.Message}");
-                }                
+                    BootstrapServers = _solutionOptions.Kafka.BootstrapServers
+                }).Build();
+
+                await KafkaHelper.WaitForTopicAsync(_solutionOptions.Kafka.NotificationsTopic, adminClient);
+
+                _consumer.Subscribe(_solutionOptions.Kafka.NotificationsTopic);
+                Log.Information($"KafkaNotificationConsumerService subscribed to {_solutionOptions.Kafka.NotificationsTopic}");
             }
-        }
-        catch (OperationCanceledException)
-        {
-            Log.Information("KafkaNotificationConsumerService is stopping...");
-        }
-        finally
-        {
-            _consumer.Close();
-        }
+            catch (Exception ex)
+            {
+                Log.Error($"Kafka initialization error: {ex.Message}");
+                return;
+            }
+
+            try
+            {
+                while (!stoppingToken.IsCancellationRequested)
+                {
+                    try
+                    {
+                        var consumeResult = _consumer.Consume(stoppingToken);
+                        if (consumeResult == null) continue;
+
+                        Log.Information("Received notification from Kafka: {Value}", consumeResult.Message.Value);
+
+                        var notification = JsonSerializer.Deserialize<TransactionNotificationEvent>(consumeResult.Message.Value);
+                        if (notification != null)
+                        {
+                            await NotifyUsersAsync(notification);
+                        }
+
+                        _consumer.Commit(consumeResult);
+                    }
+                    catch (ConsumeException ex)
+                    {
+                        Log.Error($"Kafka consume notification error: {ex.Error.Reason}");
+                        await Task.Delay(1000, stoppingToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error($"General error in KafkaNotificationConsumerService: {ex.Message}");
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                Log.Information("KafkaNotificationConsumerService is stopping...");
+            }
+            finally
+            {
+                _consumer.Close();
+            }
+        }, stoppingToken);
     }
 
     #region Private Methods

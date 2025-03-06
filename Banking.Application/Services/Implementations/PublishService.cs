@@ -87,7 +87,8 @@ public class PublishService : IPublishService
 
             await _transactionRepository.AddAsync(entity);
 
-            await _kafkaProducer.PublishAsync(_solutionOptions.Kafka.TransactionsTopic, entity);
+            var transactionMessage = entity.ToDomain();
+            await _kafkaProducer.PublishAsync(_solutionOptions.Kafka.TransactionsTopic, transactionMessage);
 
             return entity.ToDomain();
         }
