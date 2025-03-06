@@ -21,6 +21,7 @@
     {
         public required string Host { get; set; }
         public required string InstanceName { get; set; }
+        public required int BalanceLifetimeMinutes { get; set; }
     }
 
     public class KafkaOptions
