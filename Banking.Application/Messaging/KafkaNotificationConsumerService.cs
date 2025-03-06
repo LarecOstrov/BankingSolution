@@ -73,11 +73,13 @@ public class KafkaNotificationConsumerService : BackgroundService
                     }
                     catch (ConsumeException ex)
                     {
+                        _consumer.Commit();
                         Log.Error($"Kafka consume notification error: {ex.Error.Reason}");
                         await Task.Delay(1000, stoppingToken);
                     }
                     catch (Exception ex)
                     {
+                        _consumer.Commit();
                         Log.Error($"General error in KafkaNotificationConsumerService: {ex.Message}");
                     }
                 }
