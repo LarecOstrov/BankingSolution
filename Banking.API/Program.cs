@@ -73,11 +73,7 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
     ConfigureMessagingAsync(services, solutionOptions);
 
     // Services
-    services.AddControllers()
-        .AddJsonOptions(options =>
-        {
-            options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.Preserve;
-        });    
+    services.AddControllers();
     services.AddSingleton<WebSocketService>();
     services.AddScoped<IPublishService, PublishService>();
     services.AddScoped<ITransactionService, TransactionService>();
