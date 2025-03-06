@@ -12,7 +12,11 @@ public class RequestLoggingMiddleware
     {
         _next = next;
     }
-
+    /// <summary>
+    /// Middleware to log incoming requests
+    /// </summary>
+    /// <param name="context"></param>
+    /// <returns>Task</returns>
     public async Task InvokeAsync(HttpContext context)
     {
         var ipAddress = context.Connection.RemoteIpAddress?.ToString();

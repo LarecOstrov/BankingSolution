@@ -1,7 +1,6 @@
-﻿using Banking.Application.Repositories.Interfaces;
-using Banking.Application.Services.Interfaces;
+﻿using Banking.Application.Services.Interfaces;
 using Banking.Infrastructure.Config;
-using Banking.Infrastructure.Database.Entities;
+using Banking.Infrastructure.Messaging.Kafka;
 using Confluent.Kafka;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -27,79 +26,78 @@ public class KafkaConsumerService : BackgroundService
             .Build();
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    /// <summary>
+    /// Executes the background service
+    /// </summary>
+    /// <param name="stoppingToken"></param>
+    /// <returns>Task</returns>
+    protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-
-        using (var adminClient = new AdminClientBuilder(new AdminClientConfig
-        {
-            BootstrapServers = _solutionOptions.Kafka.BootstrapServers
-        }).Build())
-        {
-            await WaitForTopicAsync(_solutionOptions.Kafka.TransactionsTopic, adminClient);
-        }
-
-        _consumer.Subscribe(_solutionOptions.Kafka.TransactionsTopic);
-
-        while (!stoppingToken.IsCancellationRequested)
+        return Task.Run(async () =>
         {
             try
             {
-                var consumeResult = _consumer.Consume(stoppingToken);
-                if (consumeResult == null) continue;
 
-                using var scope = _serviceScopeFactory.CreateScope();
-                var transactionService = scope.ServiceProvider.GetRequiredService<ITransactionService>();
-                var failedTransactionRepository = scope.ServiceProvider.GetRequiredService<IFailedTransactionRepository>();
-                Log.Information($"Received transaction from Kafka: {consumeResult.Message.Value}");
+                await KafkaHelper.CreateKafkaTopicAsync(
+                    _solutionOptions.Kafka.BootstrapServers,
+                    _solutionOptions.Kafka.TransactionsTopic);
 
-                bool success = await transactionService.ProcessTransactionAsync(consumeResult);
 
-                if (!success)
+                using var adminClient = new AdminClientBuilder(new AdminClientConfig
                 {
-                    Log.Error($"Transaction failed, saving to Database: {consumeResult.Message.Value}");
-                    var failedTransaction = new FailedTransactionEntity
+                    BootstrapServers = _solutionOptions.Kafka.BootstrapServers
+                }).Build();
+
+                await KafkaHelper.WaitForTopicAsync(_solutionOptions.Kafka.TransactionsTopic, adminClient);
+
+
+                _consumer.Subscribe(_solutionOptions.Kafka.TransactionsTopic);
+                Log.Information($"KafkaConsumerService subscribed to {_solutionOptions.Kafka.TransactionsTopic}");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Kafka initialization error: {ex.Message}");
+                return;
+            }
+
+            try
+            {
+                while (!stoppingToken.IsCancellationRequested)
+                {
+                    try
                     {
-                        TransactionMessage = consumeResult.Message.Value,
-                        Reason = "Declined by service",
-                    };
-                    await failedTransactionRepository.AddAsync(failedTransaction);
+                        var consumeResult = _consumer.Consume(stoppingToken);
+                        if (consumeResult == null) continue;
+
+                        using var scope = _serviceScopeFactory.CreateScope();
+                        var transactionService = scope.ServiceProvider.GetRequiredService<ITransactionService>();
+
+                        Log.Information($"Received transaction from Kafka: {consumeResult.Message.Value}");
+
+                        await transactionService.ProcessTransactionAsync(consumeResult);
+
+                        _consumer.Commit(consumeResult);
+                    }
+                    catch (ConsumeException ex)
+                    {
+                        Log.Error($"Kafka consume error: {ex.Error.Reason}");
+                        await Task.Delay(1000, stoppingToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error($"General error in KafkaConsumerService: {ex.Message}");
+                    }
                 }
             }
-            catch (ConsumeException ex)
+            catch (OperationCanceledException)
             {
-                Log.Error($"Kafka consume error: {ex.Error.Reason}");
-                await Task.Delay(5000, stoppingToken);
+                Log.Information("KafkaConsumerService is stopping...");
             }
-            catch (Exception ex)
+            finally
             {
-                Log.Error($"General error in KafkaConsumerService: {ex.Message}");
+                _consumer.Close();
             }
-        }
+        }, stoppingToken);
 
-        _consumer.Close();
     }
-
-    private async Task WaitForTopicAsync(string topic, IAdminClient adminClient)
-    {
-        Log.Information($"Kafka start wait for topic {topic}");
-        while (true)
-        {
-            try
-            {
-                var metadata = adminClient.GetMetadata(TimeSpan.FromSeconds(5));
-                if (metadata.Topics.Any(t => t.Topic == topic))
-                {
-                    Log.Information($"Topic {topic} is available.");
-                    return;
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"Waiting for topic {topic}: {ex.Message}");
-                await Task.Delay(5000);
-                continue;
-            }
-        }
-    }
-
 }

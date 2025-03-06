@@ -1,3 +1,4 @@
+using Banking.API.GraphQL;
 using Banking.Application.Implementations;
 using Banking.Application.Repositories.Implementations;
 using Banking.Application.Repositories.Interfaces;
@@ -16,13 +17,14 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Prometheus;
 using Serilog;
-using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
+using StackExchange.Redis;
+
 
 try
 {
     var builder = WebApplication.CreateBuilder(args);
 
-    // Load AppOptions from Common
+    // Load SolutionOptions from Infrustructure appsettings.json
     var solutionOptions = LoadSolutionOptionsHelper.LoadSolutionOptions(builder);
 
     ConfigureLogging(builder);
@@ -68,25 +70,23 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
     services.AddDbContext<ApplicationDbContext>(dbOptions =>
         dbOptions.UseSqlServer(solutionOptions.ConnectionStrings.DefaultConnection));
 
-    // Kaffka Producer
-    var kafkaConfig = new ProducerConfig 
-    { 
-        BootstrapServers = solutionOptions.Kafka.BootstrapServers,
-        Acks = Acks.All,
-        EnableIdempotence = true,
-        MessageSendMaxRetries = int.MaxValue,
-        LingerMs = 2,
-        BatchSize = 32 * 1024
-    };
-    services.AddSingleton<ProducerConfig>(kafkaConfig);
-    services.AddSingleton<IKafkaProducer, KafkaProducer>();
+    ConfigureMessagingAsync(services, solutionOptions);
 
-    // Add Controllers
+    // Services
     services.AddControllers()
         .AddJsonOptions(options =>
         {
             options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.Preserve;
-        });
+        });    
+    services.AddSingleton<WebSocketService>();
+    services.AddScoped<IPublishService, PublishService>();
+    services.AddScoped<ITransactionService, TransactionService>();
+    services.AddScoped<IAccountService, AccountService>();
+    services.AddScoped<IAuthService, AuthService>();
+
+    // Redis configuration
+    services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(solutionOptions.Redis.Host));
+    services.AddScoped<IRedisCacheService, RedisCacheService>();
 
     // Repositories
     services.AddScoped<IAccountRepository, AccountRepository>();
@@ -95,18 +95,11 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
     services.AddScoped<IRoleRepository, RoleRepository>();
     services.AddScoped<IBalanceHistoryRepository, BalanceHistoryRepository>();
     services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
-
-
-    // Services
-    services.AddSingleton<WebSocketService>();
-    services.AddScoped<IPublishService, PublishService>();
-    services.AddScoped<ITransactionService, TransactionService>();
-    services.AddScoped<IAccountService, AccountService>();
-    services.AddScoped<IAuthService, AuthService>();
-    services.AddScoped<IRedisCacheService, RedisCacheService>();
+    services.AddScoped<IFailedTransactionRepository, FailedTransactionRepository>();
 
     // GraphQL
     services.AddGraphQLServer()
+        .AddAuthorization()
         .AddQueryType<Query>()
         .AddFiltering()
         .AddSorting()
@@ -118,15 +111,7 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
     services.AddScoped<Query>();
     services.AddAuthorization();
     services.AddValidation();
-
-
-    // Redis configuration
-    services.AddStackExchangeRedisCache(redisOptions =>
-    {
-        redisOptions.Configuration = solutionOptions.Redis.Host;
-        redisOptions.InstanceName = solutionOptions.Redis.InstanceName;
-    });
-
+    
     // CORS Configuration
     var corsOptions = solutionOptions.Cors;
     services.AddCors(options =>
@@ -145,6 +130,42 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
                 builder => builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
         }
     });
+}
+
+void ConfigureMessagingAsync(IServiceCollection services, SolutionOptions solutionOptions)
+{
+    Log.Information($"Connection Kafka BootstrapServers: {solutionOptions.Kafka.BootstrapServers}");
+    Log.Information($"Consumer Kafka ConsumerGroup: {solutionOptions.Kafka.ConsumerGroup}");
+
+    // Kaffka configuration
+    // Producer
+    var kafkaProducerConfig = new ProducerConfig
+    {
+        BootstrapServers = solutionOptions.Kafka.BootstrapServers,
+        Acks = Acks.All,
+        EnableIdempotence = true,
+        MessageSendMaxRetries = int.MaxValue,
+        LingerMs = 2,
+        BatchSize = 32 * 1024
+    };
+
+    // Consumer
+    var kafkaConsumerNotificationConfig = new ConsumerConfig
+    {
+        BootstrapServers = solutionOptions.Kafka.BootstrapServers,
+        GroupId = solutionOptions.Kafka.ConsumerGroup,
+        AutoOffsetReset = AutoOffsetReset.Earliest,
+        EnableAutoCommit = true,
+        IsolationLevel = IsolationLevel.ReadCommitted,
+        AllowAutoCreateTopics = true
+    };
+
+    // Services
+    services.AddControllers();
+    services.AddSingleton<ProducerConfig>(kafkaProducerConfig);
+    services.AddSingleton<IKafkaProducer, KafkaProducer>();    
+    services.AddSingleton(kafkaConsumerNotificationConfig);    
+    services.AddHostedService<KafkaNotificationConsumerService>();
 }
 
 /// <summary>

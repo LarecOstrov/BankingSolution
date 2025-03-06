@@ -21,7 +21,6 @@ public class PublishService : IPublishService
         IKafkaProducer kafkaProducer,
         ITransactionRepository transactionRepository,
         IRedisCacheService redisCacheService,
-        IAccountService accountService,
         IOptions<SolutionOptions> solutionOptions)
     {
         _kafkaProducer = kafkaProducer;
@@ -30,6 +29,11 @@ public class PublishService : IPublishService
         _solutionOptions = solutionOptions.Value;
     }
 
+    /// <summary>
+    /// Publishes a transaction to Kafka
+    /// </summary>
+    /// <param name="transaction"></param>
+    /// <returns>Task of Transaction</returns>
     public async Task<Transaction> PublishTransactionAsync(Transaction transaction)
     {
         try
@@ -59,8 +63,7 @@ public class PublishService : IPublishService
 
                 if (balance == null)
                 {
-                    Log.Warning($"Balance for account {transaction.FromAccountId} not found in cache");
-                    throw new Exception("Balance information not available");
+                    Log.Information($"Balance for account {transaction.FromAccountId} not found in cache");                    
                 }
 
                 if (balance < transaction.Amount)
@@ -77,21 +80,39 @@ public class PublishService : IPublishService
 
                 if (balance == null)
                 {
-                    Log.Warning($"Balance for account {transaction.ToAccountId} not found in cache");
-                    throw new Exception("Balance information not available");
+                    Log.Information($"Balance for account {transaction.ToAccountId} not found in cache");
                 }
             }
             var entity = TransactionEntity.FromDomain(transaction);
 
             await _transactionRepository.AddAsync(entity);
 
-            await _kafkaProducer.PublishAsync(_solutionOptions.Kafka.TransactionsTopic, entity);
+            var transactionMessage = entity.ToDomain();
+            await _kafkaProducer.PublishAsync(_solutionOptions.Kafka.TransactionsTopic, transactionMessage);
 
             return entity.ToDomain();
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Error publishing transaction");
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Publishes a transaction notification to Kafka
+    /// </summary>
+    /// <param name="notificationEvent"></param>
+    /// <returns>Task</returns>
+    public async Task PublishTransactionNotificationAsync(TransactionNotificationEvent notificationEvent)
+    {
+        try
+        {
+            await _kafkaProducer.PublishAsync(_solutionOptions.Kafka.NotificationsTopic, notificationEvent);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error publishing transaction notification");
             throw;
         }
     }

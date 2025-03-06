@@ -8,6 +8,11 @@ namespace Banking.Application.Repositories.Implementations
     public class RoleRepository : BaseRepository<RoleEntity>, IRoleRepository
     {
         public RoleRepository(ApplicationDbContext dbContext) : base(dbContext) { }
+        /// <summary>
+        /// Get a role by name
+        /// </summary>
+        /// <param name="roleName"></param>
+        /// <returns>Task of RoleEntity</returns>
         public async Task<RoleEntity?> GetRoleByNameAsync(string roleName)
         {
             return await _dbContext.Roles

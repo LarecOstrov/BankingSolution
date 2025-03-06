@@ -1,5 +1,8 @@
-﻿using Banking.Application.Repositories.Interfaces;
+﻿using Azure.Core;
+using Banking.Application.Repositories.Implementations;
+using Banking.Application.Repositories.Interfaces;
 using Banking.Application.Services.Interfaces;
+using Banking.Domain.ValueObjects;
 using Banking.Infrastructure.Config;
 using Banking.Infrastructure.Database.Entities;
 using Microsoft.Extensions.Options;
@@ -14,58 +17,134 @@ namespace Banking.Application.Services;
 public class AuthService : IAuthService
 {
     private readonly IUserRepository _userRepository;
+    private readonly IAccountService _accountService;
+    private readonly IAccountRepository _accountRepository;
     private readonly IRoleRepository _roleRepository;
     private readonly IRefreshTokenRepository _refreshTokenRepository;
     private readonly string _jwtSecretKey;
     private readonly string _issuer;
     private readonly string _audience;
+    private readonly int _expiryMinutes;
     private readonly SolutionOptions _solutionOptions;
 
     public AuthService(IUserRepository userRepository,
+        IAccountService accountService,
+        IAccountRepository accountRepository,
         IRoleRepository roleRepository,
         IRefreshTokenRepository refreshTokenRepository,
         IOptions<SolutionOptions> solutionOptions)
     {
         _userRepository = userRepository;
+        _accountService = accountService;
+        _accountRepository = accountRepository;
         _roleRepository = roleRepository;
         _refreshTokenRepository = refreshTokenRepository;
         _solutionOptions = solutionOptions.Value;
         _jwtSecretKey = _solutionOptions.Jwt.SecretKey;
         _issuer = _solutionOptions.Jwt.Issuer;
         _audience = _solutionOptions.Jwt.Audience;
+        _expiryMinutes = _solutionOptions.Jwt.ExpiryMinutes;
     }
 
-    public async Task<string?> LoginAsync(string email, string password)
+    public async Task<LoginResponse?> LoginAsync(LoginRequest request)
     {
-        var user = await _userRepository.GetUserByEmailAsync(email);
-        if (user == null || !VerifyPassword(password, user.PasswordHash))
-            return null;
+        var user = await _userRepository.GetUserByEmailAsync(request.Email);
+        if (user == null || !VerifyPassword(request.Password, user.PasswordHash))
+            throw new Exception("Invalid email or password");
 
         if (!user.Confirmed)
-            return null;
+            throw new Exception("User not confirmed");
 
-        return GenerateJwtToken(user);
-    }
-
-    public async Task<bool> RegisterAsync(string fullName, string email, string password, string roleName)
-    {
-        if (await _userRepository.GetUserByEmailAsync(email) != null)
-            return false;
-
-        var role = await _roleRepository.GetRoleByNameAsync(roleName);
-        if (role == null) return false;
-
-        var user = new UserEntity
+        var refreshToken = new RefreshTokenEntity
         {
             Id = Guid.NewGuid(),
-            FullName = fullName,
-            Email = email,
-            PasswordHash = HashPassword(password),
-            RoleId = role.Id,
-            Confirmed = false
+            UserId = user.Id,
+            Token = Guid.NewGuid().ToString(),
+            ExpiryDate = DateTime.UtcNow.AddDays(7)
         };
 
-        return await _userRepository.AddAsync(user) is not null;
+        var result = await _refreshTokenRepository.AddAsync(refreshToken);
+        if (result == null)
+            throw new Exception("Failed to generate refresh token");
+
+        var accessToken = GenerateJwtToken(user);
+
+        return new LoginResponse(accessToken, refreshToken.Token);        
+    }
+
+    public async Task<bool> RegisterAsync(RegisterRequest request)
+    {
+
+        if (await _userRepository.GetUserByEmailAsync(request.Email) != null)
+            return false;
+
+        using (var transaction = await _userRepository.BeginTransactionAsync())
+        {
+            try
+            {
+                bool confirmed = false;
+
+                if (request.Role.Trim().ToLower() == "admin")
+                {
+                    if (await _userRepository.CountAllAsync() == 0)
+                    {
+                        await _roleRepository.AddAsync(new RoleEntity
+                        {
+                            Id = Guid.NewGuid(),
+                            Name = "Admin"
+                        });
+
+                        confirmed = true;
+                    }
+                }
+
+                var role = await _roleRepository.GetRoleByNameAsync(request.Role);
+                if (role == null)
+                {
+                    transaction.Rollback();
+                    return false;
+                }
+
+                var user = new UserEntity
+                {
+                    Id = Guid.NewGuid(),
+                    FullName = request.FullName,
+                    Email = request.Email,
+                    PasswordHash = HashPassword(request.Password),
+                    RoleId = role.Id,
+                    Confirmed = confirmed
+                };
+                var result = await _userRepository.AddAsync(user);
+
+                if (result == null)
+                {
+                    transaction.Rollback();
+                    return false;
+                }
+
+                var account = new AccountEntity
+                {
+                    Id = Guid.NewGuid(),
+                    AccountNumber = await _accountService.GenerateUniqueIBANAsync(),
+                    UserId = result.Id,
+                };
+
+                var resultAccount = await _accountRepository.AddAsync(account);
+                if (resultAccount == null)
+                {
+                    transaction.Rollback();
+                    return false;
+                }
+
+                transaction.Commit();
+                return true;
+            }
+            catch
+            {
+                transaction.Rollback();
+                return false;
+            }
+        }
     }
 
     public async Task<string?> RefreshTokenAsync(string refreshToken)
@@ -74,23 +153,9 @@ public class AuthService : IAuthService
         if (tokenEntity == null || tokenEntity.ExpiryDate < DateTime.UtcNow)
             return null;
 
-        var user = await _userRepository.GetByIdAsync(tokenEntity.UserId);
-        if (user == null) return null;
+        if (tokenEntity.User == null || tokenEntity.User.Role == null) return null;
 
-        var newToken = GenerateJwtToken(user);
-
-        await _refreshTokenRepository.DeleteAsync(refreshToken);
-
-        var newRefreshToken = new RefreshTokenEntity
-        {
-            Id = Guid.NewGuid(),
-            UserId = user.Id,
-            Token = Guid.NewGuid().ToString(),
-            ExpiryDate = DateTime.UtcNow.AddDays(7)
-        };
-        await _refreshTokenRepository.AddAsync(newRefreshToken);
-
-        return newToken;
+        return GenerateJwtToken(tokenEntity.User);
     }
 
     /// <summary>
@@ -102,8 +167,47 @@ public class AuthService : IAuthService
         return Guid.TryParse(userIdClaim, out var userId) ? userId : null;
     }
 
+    public ClaimsPrincipal? ValidateJwtToken(string? token)
+    {
+        if (string.IsNullOrEmpty(token))
+            return null;
+
+        var tokenHandler = new JwtSecurityTokenHandler();
+        
+        var validationParams = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = _issuer,
+
+            ValidateAudience = true,
+            ValidAudience = _audience,
+
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSecretKey)),
+
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.Zero
+        };
+
+        try
+        {
+            var principal = tokenHandler.ValidateToken(token, validationParams, out var validatedToken);
+            return principal;
+        }
+        catch
+        {            
+            return null;
+        }
+    }
+
 
     #region Private
+    /// <summary>
+    /// Generate JWT token
+    /// </summary>
+    /// <param name="user"></param>
+    /// <returns>string token</returns>
+    /// <exception cref="Exception"></exception>
     private string GenerateJwtToken(UserEntity user)
     {
         if (user.Role == null) throw new Exception("User role not found");
@@ -121,19 +225,30 @@ public class AuthService : IAuthService
             _issuer,
             _audience,
             claims,
-            expires: DateTime.UtcNow.AddMinutes(60),
+            expires: DateTime.UtcNow.AddMinutes(_expiryMinutes),
             signingCredentials: credentials
         );
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
+    /// <summary>
+    /// Hash password
+    /// </summary>
+    /// <param name="password"></param>
+    /// <returns>string hash</returns>
     private static string HashPassword(string password)
     {
         using var sha256 = SHA256.Create();
         return Convert.ToBase64String(sha256.ComputeHash(Encoding.UTF8.GetBytes(password)));
     }
 
+    /// <summary>
+    /// Verify password
+    /// </summary>
+    /// <param name="password"></param>
+    /// <param name="storedHash"></param>
+    /// <returns>Boolean indicates if password is valid</returns>
     private static bool VerifyPassword(string password, string storedHash)
     {
         return HashPassword(password) == storedHash;
