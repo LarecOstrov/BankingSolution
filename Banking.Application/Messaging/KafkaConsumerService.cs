@@ -80,13 +80,16 @@ public class KafkaConsumerService : BackgroundService
                     }
                     catch (ConsumeException ex)
                     {
+                        _consumer.Commit();
                         Log.Error($"Kafka consume error: {ex.Error.Reason}");
                         await Task.Delay(1000, stoppingToken);
                     }
                     catch (Exception ex)
                     {
+                        _consumer.Commit();
                         Log.Error($"General error in KafkaConsumerService: {ex.Message}");
                     }
+
                 }
             }
             catch (OperationCanceledException)
