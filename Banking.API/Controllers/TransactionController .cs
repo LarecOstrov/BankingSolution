@@ -1,5 +1,4 @@
-﻿using Banking.Application.Repositories.Implementations;
-using Banking.Application.Repositories.Interfaces;
+﻿using Banking.Application.Repositories.Interfaces;
 using Banking.Application.Services.Interfaces;
 using Banking.Domain.Enums;
 using Banking.Domain.ValueObjects;
@@ -37,16 +36,16 @@ public class TransactionController : ControllerBase
     /// Deposit funds (only for authorized services)
     /// </summary>
     [HttpPost("deposit")]
-    [Authorize(Roles = "PaymentService, Admin")] 
+    [Authorize(Roles = "PaymentService, Admin")]
     public async Task<IActionResult> Deposit([FromBody] DepositRequest request)
-    {        
+    {
         return Accepted(await _publishService.PublishTransactionAsync(new Transaction(
             Guid.NewGuid(),
             null,
             request.ToAccountId,
             request.Amount,
             DateTime.UtcNow,
-            TransactionStatus.Pending)));       
+            TransactionStatus.Pending)));
 
     }
 
@@ -56,14 +55,14 @@ public class TransactionController : ControllerBase
     [HttpPost("withdraw")]
     [Authorize(Roles = "PaymentService, Admin")]
     public async Task<IActionResult> Withdraw([FromBody] WithdrawRequest request)
-    {        
+    {
         return Accepted(await _publishService.PublishTransactionAsync(new Transaction(
             Guid.NewGuid(),
             request.FromAccountId,
             null,
             request.Amount,
             DateTime.UtcNow,
-            TransactionStatus.Pending)));        
+            TransactionStatus.Pending)));
     }
 
     /// <summary>
@@ -71,7 +70,7 @@ public class TransactionController : ControllerBase
     /// </summary>
     [HttpPost("transfer")]
     public async Task<IActionResult> Transfer([FromBody] TransferRequest request)
-    {        
+    {
         var userId = _authService.GetUserIdFromToken(User);
         if (userId == null)
         {
@@ -100,7 +99,7 @@ public class TransactionController : ControllerBase
             request.Amount,
             DateTime.UtcNow,
             TransactionStatus.Pending)));
-        
+
     }
 
     [HttpGet("{id}")]

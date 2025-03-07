@@ -65,7 +65,7 @@
         public required string Code { get; set; }
         public required int AccountLength { get; set; }
     }
-    
+
     public class TransactionRetryPolicy
     {
         public required int MaxRetries { get; set; } = 1;

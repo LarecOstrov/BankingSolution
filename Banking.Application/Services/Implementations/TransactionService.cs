@@ -1,5 +1,4 @@
-﻿using Banking.Application.Repositories.Implementations;
-using Banking.Application.Repositories.Interfaces;
+﻿using Banking.Application.Repositories.Interfaces;
 using Banking.Application.Services.Interfaces;
 using Banking.Domain.Entities;
 using Banking.Domain.Enums;
@@ -7,7 +6,6 @@ using Banking.Domain.ValueObjects;
 using Banking.Infrastructure.Caching;
 using Banking.Infrastructure.Config;
 using Banking.Infrastructure.Database.Entities;
-using Banking.Infrastructure.WebSockets;
 using Confluent.Kafka;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -297,6 +295,6 @@ public class TransactionService : ITransactionService
 
     #endregion
 
-    
+
 }
 

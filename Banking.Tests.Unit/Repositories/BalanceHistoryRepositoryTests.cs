@@ -27,8 +27,8 @@ public class BalanceHistoryRepositoryTests
     public async Task GetBalanceHistoryByAccountIdAsync_ShouldReturnBalanceHistory_WhenExists()
     {
         // Arrange
-        var user = new UserEntity 
-        { 
+        var user = new UserEntity
+        {
             Id = Guid.NewGuid(),
             FullName = "Test User",
             Email = "test@test.com",
@@ -87,12 +87,12 @@ public class BalanceHistoryRepositoryTests
     public async Task GetBalanceHistoryByAccountIdAsync_ShouldReturnEmpty_WhenNoHistory()
     {
         // Arrange
-        var user = new UserEntity 
+        var user = new UserEntity
         {
             Id = Guid.NewGuid(),
             FullName = "Test User",
             Email = "test@test.com",
-            PasswordHash = "hash" 
+            PasswordHash = "hash"
         };
 
         var account = new AccountEntity

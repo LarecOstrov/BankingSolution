@@ -1,6 +1,4 @@
-﻿using Azure.Core;
-using Banking.Application.Repositories.Implementations;
-using Banking.Application.Repositories.Interfaces;
+﻿using Banking.Application.Repositories.Interfaces;
 using Banking.Application.Services.Interfaces;
 using Banking.Domain.ValueObjects;
 using Banking.Infrastructure.Config;

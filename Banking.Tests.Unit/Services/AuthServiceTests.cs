@@ -116,7 +116,7 @@ public class AuthServiceTests
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("Invalid email or password");
     }
-    
+
     /// <summary>
     /// Test successful registration
     /// </summary>

@@ -1,7 +1,4 @@
-﻿using System;
-using System.Text.Json;
-using System.Threading.Tasks;
-using Banking.Application.Repositories.Interfaces;
+﻿using Banking.Application.Repositories.Interfaces;
 using Banking.Application.Services.Implementations;
 using Banking.Application.Services.Interfaces;
 using Banking.Domain.Entities;
@@ -10,12 +7,11 @@ using Banking.Domain.ValueObjects;
 using Banking.Infrastructure.Caching;
 using Banking.Infrastructure.Config;
 using Banking.Infrastructure.Database.Entities;
-using Banking.Infrastructure.WebSockets;
 using Confluent.Kafka;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Options;
 using Moq;
-using Xunit;
+using System.Text.Json;
 
 namespace Banking.Tests
 {
@@ -71,7 +67,7 @@ namespace Banking.Tests
             // Arrange
             var transaction = new Transaction
             (
-                Guid.NewGuid(),               
+                Guid.NewGuid(),
                 Guid.NewGuid(),
                 Guid.NewGuid(),
                 100,
@@ -144,7 +140,7 @@ namespace Banking.Tests
             // Arrange
             var transaction = new Transaction
             (
-                Guid.NewGuid(),               
+                Guid.NewGuid(),
                 Guid.NewGuid(),
                 Guid.NewGuid(),
                 100,
@@ -177,7 +173,7 @@ namespace Banking.Tests
             // Arrange
             var transaction = new Transaction
             (
-                Guid.NewGuid(),                
+                Guid.NewGuid(),
                 Guid.NewGuid(),
                 Guid.NewGuid(),
                 500, // Amount is greater than balance
@@ -206,7 +202,7 @@ namespace Banking.Tests
                 Balance = 100, // unufficient funds
                 UserId = Guid.NewGuid(),
                 AccountNumber = "FR1234567891234567891234",
-                User = new UserEntity {FullName = "From User", Email = "fromuser@example.com", PasswordHash = "hash" }
+                User = new UserEntity { FullName = "From User", Email = "fromuser@example.com", PasswordHash = "hash" }
             };
 
             _accountRepositoryMock.Setup(x => x.GetByIdForUpdateWithLockAsync(transaction.FromAccountId.Value))
@@ -218,7 +214,7 @@ namespace Banking.Tests
                     Balance = 50,
                     UserId = Guid.NewGuid(),
                     AccountNumber = "TO1234567891234567891234",
-                    User = new UserEntity {FullName = "To User", Email = "fromuser@example.com", PasswordHash = "hash" }
+                    User = new UserEntity { FullName = "To User", Email = "fromuser@example.com", PasswordHash = "hash" }
                 });
 
             // Act

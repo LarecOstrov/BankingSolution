@@ -24,7 +24,7 @@ namespace Banking.API.Controllers
         /// </summary>    
         [HttpGet("{accountId}")]
         public async Task<IActionResult> GetBalanceHistory(Guid accountId)
-        {            
+        {
             var userId = _authService.GetUserIdFromToken(User);
             if (userId == null)
             {
@@ -35,7 +35,7 @@ namespace Banking.API.Controllers
             {
                 return NotFound("Balance history not found.");
             }
-            return Ok(balanceHistory);           
+            return Ok(balanceHistory);
         }
     }
 }

@@ -1,5 +1,4 @@
-﻿using Banking.Application.Implementations;
-using Banking.Application.Repositories.Interfaces;
+﻿using Banking.Application.Repositories.Interfaces;
 using Banking.Application.Services.Interfaces;
 using Banking.Infrastructure.Caching;
 using Microsoft.AspNetCore.Authorization;
@@ -30,7 +29,7 @@ public class AccountController : ControllerBase
     /// </summary>    
     [HttpGet("{accountId}")]
     public async Task<IActionResult> GetAccountDetails(Guid accountId)
-    {        
+    {
         var userId = _authService.GetUserIdFromToken(User);
         if (userId == null)
         {
@@ -43,7 +42,7 @@ public class AccountController : ControllerBase
             return NotFound("Account not found.");
         }
 
-        return Ok(account);        
+        return Ok(account);
     }
 
     /// <summary>
@@ -53,13 +52,13 @@ public class AccountController : ControllerBase
     /// <returns>Taks of IActionResult</returns>
     [HttpGet("balance")]
     public async Task<IActionResult> GetBalance(Guid accountId)
-    {        
+    {
         var userId = _authService.GetUserIdFromToken(User);
         if (userId == null)
         {
             return Unauthorized("User ID not found in token.");
         }
-            
+
 
         var balance = await _redisCacheService.GetBalanceAsync(accountId);
         if (balance != null)
@@ -73,6 +72,6 @@ public class AccountController : ControllerBase
             return NotFound("Account not found.");
         }
 
-        return Ok($"Balance for account {account.Id}: {account.Balance}");        
+        return Ok($"Balance for account {account.Id}: {account.Balance}");
     }
 }

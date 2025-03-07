@@ -4,7 +4,7 @@ using System.Text;
 
 namespace Banking.Infrastructure.WebSockets
 {
-    public class WebSocketService: IWebSocketService
+    public class WebSocketService : IWebSocketService
     {
         private static readonly Dictionary<Guid, WebSocket> _connections = new();
 
@@ -46,7 +46,7 @@ namespace Banking.Infrastructure.WebSockets
         /// <param name="userId"></param>
         /// <param name="message"></param>
         /// <returns>Task</returns>
-        public async Task SendTransactionNotificationAsync(Guid userId, string message)
+        public virtual async Task SendTransactionNotificationAsync(Guid userId, string message)
         {
             var retries = 0;
             var maxRetries = 3;

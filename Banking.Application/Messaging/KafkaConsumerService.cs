@@ -1,6 +1,6 @@
 ﻿using Banking.Application.Services.Interfaces;
 using Banking.Infrastructure.Config;
-using Banking.Infrastructure.Messaging.Kafka;
+using Banking.Infrastructure.Messaging.Kafka.Helpers;
 using Confluent.Kafka;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -14,13 +14,16 @@ public class KafkaConsumerService : BackgroundService
     private readonly IConsumer<Null, string> _consumer;
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly KafkaOptions _kafkaOptions;
+    private readonly IKafkaHelper _kafkaHelper;
 
     public KafkaConsumerService(ConsumerConfig config,
+        IKafkaHelper kafkaHelper,
         IOptions<KafkaOptions> kafkaOptions,
         IServiceScopeFactory serviceScopeFactory)
     {
         _serviceScopeFactory = serviceScopeFactory;
         _kafkaOptions = kafkaOptions.Value;
+        _kafkaHelper = kafkaHelper;
         _consumer = new ConsumerBuilder<Null, string>(config)
             .SetErrorHandler((_, e) => Log.Error($"Kafka Consumer error: {e.Reason}"))
             .Build();
@@ -38,7 +41,7 @@ public class KafkaConsumerService : BackgroundService
             try
             {
 
-                await KafkaHelper.CreateKafkaTopicAsync(
+                await _kafkaHelper.CreateKafkaTopicAsync(
                     _kafkaOptions.BootstrapServers,
                     _kafkaOptions.TransactionsTopic);
 
@@ -48,7 +51,7 @@ public class KafkaConsumerService : BackgroundService
                     BootstrapServers = _kafkaOptions.BootstrapServers
                 }).Build();
 
-                await KafkaHelper.WaitForTopicAsync(_kafkaOptions.TransactionsTopic, adminClient);
+                await _kafkaHelper.WaitForTopicAsync(_kafkaOptions.TransactionsTopic, adminClient);
 
 
                 _consumer.Subscribe(_kafkaOptions.TransactionsTopic);

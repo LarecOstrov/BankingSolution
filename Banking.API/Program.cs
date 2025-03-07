@@ -10,6 +10,7 @@ using Banking.Infrastructure.Caching;
 using Banking.Infrastructure.Config;
 using Banking.Infrastructure.Database;
 using Banking.Infrastructure.Messaging.Kafka;
+using Banking.Infrastructure.Messaging.Kafka.Helpers;
 using Banking.Infrastructure.Middleware;
 using Banking.Infrastructure.WebSockets;
 using Confluent.Kafka;
@@ -107,7 +108,7 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
     services.AddScoped<Query>();
     services.AddAuthorization();
     services.AddValidation();
-    
+
     // CORS Configuration
     var corsOptions = solutionOptions.Cors;
     services.AddCors(options =>
@@ -159,8 +160,9 @@ void ConfigureMessagingAsync(IServiceCollection services, SolutionOptions soluti
     // Services
     services.AddControllers();
     services.AddSingleton<ProducerConfig>(kafkaProducerConfig);
-    services.AddSingleton<IKafkaProducer, KafkaProducer>();    
-    services.AddSingleton(kafkaConsumerNotificationConfig);    
+    services.AddSingleton<IKafkaProducer, KafkaProducer>();
+    services.AddSingleton<IKafkaHelper, KafkaHelper>();
+    services.AddSingleton(kafkaConsumerNotificationConfig);
     services.AddHostedService<KafkaNotificationConsumerService>();
 }
 

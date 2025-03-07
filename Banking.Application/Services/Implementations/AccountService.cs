@@ -63,13 +63,13 @@ public class AccountService : IAccountService
     #region Private Methods
     private static string CalculateIBANChecksum(string ibanWithoutChecksum)
     {
-        
+
         string countryDigits = ConvertLettersToDigits(ibanWithoutChecksum.Substring(0, 2));
 
-       
+
         string numericIban = ibanWithoutChecksum.Substring(4) + countryDigits + "00";
 
-        
+
         BigInteger ibanNumber = BigInteger.Parse(numericIban);
         int checksum = 98 - (int)(ibanNumber % 97);
 

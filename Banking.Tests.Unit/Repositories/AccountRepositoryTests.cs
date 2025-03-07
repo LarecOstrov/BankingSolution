@@ -1,11 +1,8 @@
 ﻿using Banking.Application.Repositories.Implementations;
 using Banking.Infrastructure.Database;
 using Banking.Infrastructure.Database.Entities;
-using Microsoft.EntityFrameworkCore;
 using FluentAssertions;
-using Xunit;
-using System;
-using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 
 public class AccountRepositoryTests
 {

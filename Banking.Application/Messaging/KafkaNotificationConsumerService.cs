@@ -1,6 +1,6 @@
 ﻿using Banking.Domain.ValueObjects;
 using Banking.Infrastructure.Config;
-using Banking.Infrastructure.Messaging.Kafka;
+using Banking.Infrastructure.Messaging.Kafka.Helpers;
 using Banking.Infrastructure.WebSockets;
 using Confluent.Kafka;
 using Microsoft.Extensions.Hosting;
@@ -11,16 +11,19 @@ using System.Text.Json;
 public class KafkaNotificationConsumerService : BackgroundService
 {
     private readonly IConsumer<Null, string> _consumer;
-    private readonly WebSocketService _webSocketService;
-    private readonly SolutionOptions _solutionOptions;
+    private readonly IWebSocketService _webSocketService;
+    private readonly KafkaOptions _kafkaOptions;
+    private readonly IKafkaHelper _kafkaHelper;
 
     public KafkaNotificationConsumerService(
-        WebSocketService webSocketService,
-        IOptions<SolutionOptions> solutionOptions,
+        IKafkaHelper kafkaHelper,
+        IWebSocketService webSocketService,
+        IOptions<KafkaOptions> kafkaOptions,
         ConsumerConfig config)
     {
         _webSocketService = webSocketService;
-        _solutionOptions = solutionOptions.Value;
+        _kafkaOptions = kafkaOptions.Value;
+        _kafkaHelper = kafkaHelper;
         _consumer = new ConsumerBuilder<Null, string>(config)
             .SetErrorHandler((_, e) => Log.Error($"Kafka Consumer error: {e.Reason}"))
             .Build();
@@ -32,19 +35,19 @@ public class KafkaNotificationConsumerService : BackgroundService
         {
             try
             {
-                await KafkaHelper.CreateKafkaTopicAsync(
-                    _solutionOptions.Kafka.BootstrapServers,
-                    _solutionOptions.Kafka.NotificationsTopic);
+                await _kafkaHelper.CreateKafkaTopicAsync(
+                    _kafkaOptions.BootstrapServers,
+                    _kafkaOptions.NotificationsTopic);
 
                 using var adminClient = new AdminClientBuilder(new AdminClientConfig
                 {
-                    BootstrapServers = _solutionOptions.Kafka.BootstrapServers
+                    BootstrapServers = _kafkaOptions.BootstrapServers
                 }).Build();
 
-                await KafkaHelper.WaitForTopicAsync(_solutionOptions.Kafka.NotificationsTopic, adminClient);
+                await _kafkaHelper.WaitForTopicAsync(_kafkaOptions.NotificationsTopic, adminClient);
 
-                _consumer.Subscribe(_solutionOptions.Kafka.NotificationsTopic);
-                Log.Information($"KafkaNotificationConsumerService subscribed to {_solutionOptions.Kafka.NotificationsTopic}");
+                _consumer.Subscribe(_kafkaOptions.NotificationsTopic);
+                Log.Information($"KafkaNotificationConsumerService subscribed to {_kafkaOptions.NotificationsTopic}");
             }
             catch (Exception ex)
             {
@@ -63,7 +66,8 @@ public class KafkaNotificationConsumerService : BackgroundService
 
                         Log.Information("Received notification from Kafka: {Value}", consumeResult.Message.Value);
 
-                        var notification = JsonSerializer.Deserialize<TransactionNotificationEvent>(consumeResult.Message.Value);
+                        var notification = JsonSerializer
+                            .Deserialize<TransactionNotificationEvent>(consumeResult.Message.Value);
                         if (notification != null)
                         {
                             await NotifyUsersAsync(notification);

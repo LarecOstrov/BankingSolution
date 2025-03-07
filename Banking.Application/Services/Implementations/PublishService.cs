@@ -46,7 +46,7 @@ public class PublishService : IPublishService
         {
             Log.Warning("Transaction from and to accounts are same");
             throw new InvalidOperationException("Transaction from and to accounts are same");
-        }        
+        }
 
         if (transaction.Amount <= 0)
         {
@@ -62,7 +62,7 @@ public class PublishService : IPublishService
 
             if (balance == null)
             {
-                Log.Information($"Balance for account {transaction.FromAccountId} not found in cache");                    
+                Log.Information($"Balance for account {transaction.FromAccountId} not found in cache");
             }
 
             if (balance < transaction.Amount)
@@ -90,7 +90,7 @@ public class PublishService : IPublishService
         await _kafkaProducer.PublishAsync(_kafkaOptions.TransactionsTopic, transactionMessage);
 
         return entity.ToDomain();
-        
+
     }
 
     /// <summary>

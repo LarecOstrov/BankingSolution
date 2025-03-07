@@ -3,7 +3,6 @@ using Banking.Infrastructure.Database;
 using Banking.Infrastructure.Database.Entities;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using Xunit;
 
 public class UserRepositoryTests
 {
@@ -13,7 +12,7 @@ public class UserRepositoryTests
     public UserRepositoryTests()
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString()) 
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
             .Options;
 
         _dbContext = new ApplicationDbContext(options);
@@ -71,21 +70,21 @@ public class UserRepositoryTests
     public async Task GetUnconfirmedUsersAsync_ShouldReturnUsers_WhenExists()
     {
         // Arrange
-        var user1 = new UserEntity 
-        { 
+        var user1 = new UserEntity
+        {
             Id = Guid.NewGuid(),
             Email = "user1@example.com",
             FullName = "Test User 1",
             PasswordHash = "hash",
-            Confirmed = false 
+            Confirmed = false
         };
         var user2 = new UserEntity
-        { 
+        {
             Id = Guid.NewGuid(),
             Email = "user2@example.com",
             FullName = "Test User 2",
             PasswordHash = "hash",
-            Confirmed = false 
+            Confirmed = false
         };
         _dbContext.Users.AddRange(user1, user2);
         await _dbContext.SaveChangesAsync();
@@ -106,12 +105,12 @@ public class UserRepositoryTests
     {
         // Arrange
         var user = new UserEntity
-        { 
+        {
             Id = Guid.NewGuid(),
             Email = "user@example.com",
             FullName = "Test User",
             PasswordHash = "hash",
-            Confirmed = false 
+            Confirmed = false
         };
         _dbContext.Users.Add(user);
         await _dbContext.SaveChangesAsync();
@@ -148,13 +147,13 @@ public class UserRepositoryTests
     {
         // Arrange
         var role = new RoleEntity { Id = Guid.NewGuid(), Name = "Admin" };
-        var user = new UserEntity 
-        { 
+        var user = new UserEntity
+        {
             Id = Guid.NewGuid(),
             Email = "user@example.com",
             FullName = "Test User",
             PasswordHash = "hash",
-            Confirmed = true 
+            Confirmed = true
         };
 
         _dbContext.Roles.Add(role);
@@ -198,14 +197,14 @@ public class UserRepositoryTests
     {
         // Arrange
         var role = new RoleEntity { Id = Guid.NewGuid(), Name = "User" };
-        var user = new UserEntity 
+        var user = new UserEntity
         {
             Id = Guid.NewGuid(),
             Email = "user@example.com",
             FullName = "Test User",
             PasswordHash = "hash",
             RoleId = role.Id,
-            Role = role 
+            Role = role
         };
 
         _dbContext.Roles.Add(role);

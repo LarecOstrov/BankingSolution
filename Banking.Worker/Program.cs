@@ -7,7 +7,7 @@ using Banking.Infrastructure.Caching;
 using Banking.Infrastructure.Config;
 using Banking.Infrastructure.Database;
 using Banking.Infrastructure.Messaging.Kafka;
-using Banking.Infrastructure.WebSockets;
+using Banking.Infrastructure.Messaging.Kafka.Helpers;
 using Confluent.Kafka;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
@@ -24,7 +24,7 @@ try
 
     ConfigureServicesAsync(builder.Services, appOptions);
 
-    var app = builder.Build();    
+    var app = builder.Build();
 
     // Allow CORS for WebSockets
     app.UseCors(appOptions.Cors.Worker.AllowedOrigins.Any() ? "AllowSpecificOrigins" : "AllowAll");
@@ -32,7 +32,7 @@ try
     // Middleware pipeline setup
     app.UseRouting();
     app.MapControllers();
-    
+
     Log.Information("Starting Web Application...");
 
     await app.RunAsync();
@@ -67,13 +67,13 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
     ConfigureMessagingAsync(services, solutionOptions);
 
     // Services
-    services.AddControllers();   
+    services.AddControllers();
     services.AddScoped<IPublishService, PublishService>();
     services.AddScoped<ITransactionService, TransactionService>();
 
     // Redis configuration    
     services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(solutionOptions.Redis.Host));
-    services.AddScoped<IRedisCacheService, RedisCacheService>();   
+    services.AddScoped<IRedisCacheService, RedisCacheService>();
 
     // Register repositories
     services.AddScoped<IAccountRepository, AccountRepository>();
@@ -114,7 +114,7 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
 }
 
 void ConfigureMessagingAsync(IServiceCollection services, SolutionOptions solutionOptions)
-{   
+{
 
     Log.Information($"Connection Kafka BootstrapServers: {solutionOptions.Kafka.BootstrapServers}");
     Log.Information($"Consumer Kafka ConsumerGroup: {solutionOptions.Kafka.ConsumerGroup}");
@@ -145,6 +145,7 @@ void ConfigureMessagingAsync(IServiceCollection services, SolutionOptions soluti
     // Services   
     services.AddSingleton<ProducerConfig>(kafkaProducerConfig);
     services.AddSingleton<IKafkaProducer, KafkaProducer>();
+    services.AddSingleton<IKafkaHelper, KafkaHelper>();
     services.AddSingleton(kafkaTransactionConsumerConfig);
-    services.AddHostedService<KafkaConsumerService>();    
+    services.AddHostedService<KafkaConsumerService>();
 }

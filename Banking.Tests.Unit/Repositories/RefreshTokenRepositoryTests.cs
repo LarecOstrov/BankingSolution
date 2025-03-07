@@ -3,9 +3,6 @@ using Banking.Infrastructure.Database;
 using Banking.Infrastructure.Database.Entities;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using System;
-using System.Threading.Tasks;
-using Xunit;
 
 public class RefreshTokenRepositoryTests
 {
@@ -15,7 +12,7 @@ public class RefreshTokenRepositoryTests
     public RefreshTokenRepositoryTests()
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString()) 
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
             .Options;
 
         _dbContext = new ApplicationDbContext(options);
@@ -55,13 +52,13 @@ public class RefreshTokenRepositoryTests
             User = user
         };
 
-        _dbContext.Roles.Add(role);  
+        _dbContext.Roles.Add(role);
         await _dbContext.SaveChangesAsync();
 
-        _dbContext.Users.Add(user); 
+        _dbContext.Users.Add(user);
         await _dbContext.SaveChangesAsync();
 
-        _dbContext.RefreshTokens.Add(tokenEntity);  
+        _dbContext.RefreshTokens.Add(tokenEntity);
         await _dbContext.SaveChangesAsync();
 
         // Act
