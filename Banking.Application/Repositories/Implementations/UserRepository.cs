@@ -2,6 +2,7 @@
 using Banking.Infrastructure.Database;
 using Banking.Infrastructure.Database.Entities;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
 
 namespace Banking.Application.Repositories.Implementations;
 
@@ -16,18 +17,16 @@ public class UserRepository : BaseRepository<UserEntity>, IUserRepository
     /// <returns>UserEntity</returns>
     public async Task<UserEntity?> GetUserByEmailAsync(string email)
     {
-        return await _dbContext.Users.Include(u => u.Role)
-            .FirstOrDefaultAsync(u => u.Email == email);
-    }
-
-    /// <summary>
-    /// Get a user by Id
-    /// </summary>
-    /// <param name="userId"></param>
-    /// <returns>UserEntity</returns>
-    public async Task<UserEntity?> GetUserByIdAsync(Guid userId)
-    {
-        return await _dbContext.Users.FindAsync(userId);
+        try
+        {
+            return await _dbContext.Users.Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.Email == email);
+        }
+        catch (DbUpdateException ex)
+        {
+            Log.Error(ex, "Database error when getting user by email.");
+            throw new Exception("Database error occurred.");
+        }
     }
 
     /// <summary>
@@ -43,13 +42,21 @@ public class UserRepository : BaseRepository<UserEntity>, IUserRepository
     /// <returns>bool</returns>
     public async Task<bool> ConfirmUserAsync(Guid userId)
     {
-        var user = await _dbContext.Users.FindAsync(userId);
-        if (user != null)
+        try
         {
-            user.Confirmed = true;
-            return await _dbContext.SaveChangesAsync() > 0;
+            var user = await _dbContext.Users.FindAsync(userId);
+            if (user != null)
+            {
+                user.Confirmed = true;
+                return await _dbContext.SaveChangesAsync() > 0;
+            }
+            return false;
         }
-        return false;
+        catch (DbUpdateException ex)
+        {
+            Log.Error(ex, "Database error when confirming user.");
+            throw new Exception("Database error occurred.");
+        }
     }
     /// <summary>
     /// Assign a role to a user
@@ -59,17 +66,25 @@ public class UserRepository : BaseRepository<UserEntity>, IUserRepository
     /// <returns>bool</returns>
     public async Task<bool> AssignRoleAsync(Guid userId, Guid roleId)
     {
-        var user = await _dbContext.Users.FindAsync(userId);
-        if (user == null)
-            return false;
+        try
+        {
+            var user = await _dbContext.Users.FindAsync(userId);
+            if (user == null)
+                return false;
 
-        var roleExists = await _dbContext.Roles.AnyAsync(r => r.Id == roleId);
-        if (!roleExists)
-            return false;
+            var roleExists = await _dbContext.Roles.AnyAsync(r => r.Id == roleId);
+            if (!roleExists)
+                return false;
 
-        user.RoleId = roleId;
-        await _dbContext.SaveChangesAsync();
-        return true;
+            user.RoleId = roleId;
+            await _dbContext.SaveChangesAsync();
+            return true;
+        }
+        catch (DbUpdateException ex)
+        {
+            Log.Error(ex, "Database error when assigning role to user.");
+            throw new Exception("Database error occurred.");
+        }
     }
 
     /// <summary>
@@ -77,10 +92,18 @@ public class UserRepository : BaseRepository<UserEntity>, IUserRepository
     /// </summary>
     /// <param name="userId"></param>
     /// <returns>Taks of UserEntity</returns>
-    public async Task<UserEntity?> GetUserWithRoileById(Guid userId)
-    {        
-        return await _dbContext.Users
-            .Include(u => u.Role)
-            .FirstOrDefaultAsync(u => u.Id == userId);
+    public async Task<UserEntity?> GetUserWithRoleById(Guid userId)
+    {
+        try
+        {
+            return await _dbContext.Users
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.Id == userId);
+        }
+        catch (DbUpdateException ex)
+        {
+            Log.Error(ex, "Database error when getting user with role by Id.");
+            throw new Exception("Database error occurred.");
+        }
     }
 }

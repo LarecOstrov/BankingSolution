@@ -74,7 +74,7 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
 
     // Services
     services.AddControllers();
-    services.AddSingleton<WebSocketService>();
+    services.AddSingleton<IWebSocketService, WebSocketService>();
     services.AddScoped<IPublishService, PublishService>();
     services.AddScoped<ITransactionService, TransactionService>();
     services.AddScoped<IAccountService, AccountService>();
@@ -177,6 +177,8 @@ async Task ConfigureMiddleware(WebApplication app, SolutionOptions appOptions)
 
     // Request logging
     app.UseMiddleware<RequestLoggingMiddleware>();
+    app.UseMiddleware<ExceptionHandlingMiddleware>();
+    app.UseExceptionHandling();
     app.UseRequestLogging();
 
     // Auto-migrate database in development

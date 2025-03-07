@@ -39,21 +39,14 @@ public class TransactionController : ControllerBase
     [HttpPost("deposit")]
     [Authorize(Roles = "PaymentService, Admin")] 
     public async Task<IActionResult> Deposit([FromBody] DepositRequest request)
-    {
-        try
-        {
-            return Accepted(await _publishService.PublishTransactionAsync(new Transaction(
-                Guid.NewGuid(),
-                null,
-                request.ToAccountId,
-                request.Amount,
-                DateTime.UtcNow,
-                TransactionStatus.Pending)));
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(ex.Message);
-        }
+    {        
+        return Accepted(await _publishService.PublishTransactionAsync(new Transaction(
+            Guid.NewGuid(),
+            null,
+            request.ToAccountId,
+            request.Amount,
+            DateTime.UtcNow,
+            TransactionStatus.Pending)));       
 
     }
 
@@ -63,21 +56,14 @@ public class TransactionController : ControllerBase
     [HttpPost("withdraw")]
     [Authorize(Roles = "PaymentService, Admin")]
     public async Task<IActionResult> Withdraw([FromBody] WithdrawRequest request)
-    {
-        try
-        {
-            return Accepted(await _publishService.PublishTransactionAsync(new Transaction(
-                Guid.NewGuid(),
-                request.FromAccountId,
-                null,
-                request.Amount,
-                DateTime.UtcNow,
-                TransactionStatus.Pending)));
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(ex.Message);
-        }
+    {        
+        return Accepted(await _publishService.PublishTransactionAsync(new Transaction(
+            Guid.NewGuid(),
+            request.FromAccountId,
+            null,
+            request.Amount,
+            DateTime.UtcNow,
+            TransactionStatus.Pending)));        
     }
 
     /// <summary>
@@ -85,42 +71,36 @@ public class TransactionController : ControllerBase
     /// </summary>
     [HttpPost("transfer")]
     public async Task<IActionResult> Transfer([FromBody] TransferRequest request)
-    {
-        try
+    {        
+        var userId = _authService.GetUserIdFromToken(User);
+        if (userId == null)
         {
-            var userId = _authService.GetUserIdFromToken(User);
-            if (userId == null)
-            {
-                return Unauthorized("User ID not found in token.");
-            }
-
-            var user = await _userRepository.GetUserWithRoileById(userId.Value);
-            if (user == null)
-            {
-                return NotFound("User not found.");
-            }
-
-            if (user.Role?.Name != "Admin")
-            {
-                var isOwner = await _accountService.IsAccountOwnerAsync(request.FromAccountId, userId.Value);
-                if (!isOwner)
-                {
-                    return Forbid("You can only transfer funds from your own account.");
-                }
-            }
-
-            return Accepted(await _publishService.PublishTransactionAsync(new Transaction(
-                Guid.NewGuid(),
-                request.FromAccountId,
-                request.ToAccountId,
-                request.Amount,
-                DateTime.UtcNow,
-                TransactionStatus.Pending)));
+            return Unauthorized("User ID not found in token.");
         }
-        catch (Exception ex)
+
+        var user = await _userRepository.GetUserWithRoleById(userId.Value);
+        if (user == null)
         {
-            return BadRequest(ex.Message);
+            return NotFound("User not found.");
         }
+
+        if (user.Role?.Name != "Admin")
+        {
+            var isOwner = await _accountService.IsAccountOwnerAsync(request.FromAccountId, userId.Value);
+            if (!isOwner)
+            {
+                return Forbid("You can only transfer funds from your own account.");
+            }
+        }
+
+        return Accepted(await _publishService.PublishTransactionAsync(new Transaction(
+            Guid.NewGuid(),
+            request.FromAccountId,
+            request.ToAccountId,
+            request.Amount,
+            DateTime.UtcNow,
+            TransactionStatus.Pending)));
+        
     }
 
     [HttpGet("{id}")]

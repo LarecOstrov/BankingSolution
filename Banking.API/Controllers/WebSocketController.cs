@@ -10,17 +10,17 @@ namespace Banking.Worker.Controllers
     [Route("ws")]
     public class WebSocketController : ControllerBase
     {
-        private readonly WebSocketService _webSocketService;
+        private readonly IWebSocketService _webSocketService;
         private readonly IAuthService _authService;
 
-        public WebSocketController(WebSocketService webSocketService, IAuthService authService)
+        public WebSocketController(IWebSocketService webSocketService, IAuthService authService)
         {
             _webSocketService = webSocketService;
             _authService = authService;
         }
 
         [HttpGet("connect")]
-        public async Task Connect()
+        public async Task ConnectAsync()
         {
             if (!HttpContext.WebSockets.IsWebSocketRequest)
             {

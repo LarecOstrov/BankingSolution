@@ -4,7 +4,7 @@ using System.Text;
 
 namespace Banking.Infrastructure.WebSockets
 {
-    public class WebSocketService
+    public class WebSocketService: IWebSocketService
     {
         private static readonly Dictionary<Guid, WebSocket> _connections = new();
 

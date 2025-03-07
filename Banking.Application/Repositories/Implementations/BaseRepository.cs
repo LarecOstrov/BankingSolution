@@ -2,6 +2,7 @@
 using Banking.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Serilog;
 
 namespace Banking.Application.Repositories.Implementations
 {
@@ -22,7 +23,15 @@ namespace Banking.Application.Repositories.Implementations
         /// <returns>Task of IDbContextTransaction</returns>
         public async Task<IDbContextTransaction> BeginTransactionAsync()
         {
-            return await _dbContext.Database.BeginTransactionAsync();
+            try
+            {
+                return await _dbContext.Database.BeginTransactionAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                Log.Error(ex, "Database error occurred when beginning a transaction.");
+                throw new Exception("Database error occurred.");
+            }
         }
 
         /// <summary>
@@ -30,13 +39,35 @@ namespace Banking.Application.Repositories.Implementations
         /// </summary>
         /// <param name="id"></param>
         /// <returns>Task of T</returns>
-        public async Task<T?> GetByIdAsync(Guid id) => await _dbSet.FindAsync(id);
+        public async Task<T?> GetByIdAsync(Guid id)
+        {
+            try
+            {
+                return await _dbSet.FindAsync(id);
+            }
+            catch (DbUpdateException ex)
+            {
+                Log.Error(ex, "Database error occurred when getting an entity by Id.");
+                throw new Exception("Database error occurred.");
+            }
+        }
 
         /// <summary>
         /// Get all entities
         /// </summary>
         /// <returns>IQueryable of T</returns>
-        public IQueryable<T> GetAll() => _dbSet.AsQueryable();
+        public IQueryable<T> GetAll()
+        {
+            try
+            {
+                return _dbSet.AsQueryable();
+            }
+            catch (DbUpdateException ex)
+            {
+                Log.Error(ex, "Database error occurred when getting all entities.");
+                throw new Exception("Database error occurred.");
+            }
+        }
 
         /// <summary>
         /// Count all entities asynchronously
@@ -51,12 +82,20 @@ namespace Banking.Application.Repositories.Implementations
         /// <returns>Task of T</returns>
         public async Task<T?> AddAsync(T entity)
         {
-            await _dbSet.AddAsync(entity);
-            if (await _dbContext.SaveChangesAsync() > 0)
+            try
             {
-                return entity;
+                await _dbSet.AddAsync(entity);
+                if (await _dbContext.SaveChangesAsync() > 0)
+                {
+                    return entity;
+                }
+                return null;
             }
-            return null;
+            catch (DbUpdateException ex)
+            {
+                Log.Error(ex, "Database error occurred when adding an entity.");
+                throw new Exception("Database error occurred.");
+            }
         }
 
         /// <summary>
@@ -66,9 +105,16 @@ namespace Banking.Application.Repositories.Implementations
         /// <returns>Task of bool</returns>
         public async Task<bool> UpdateAsync(T entity)
         {
-            _dbSet.Update(entity);
-            await _dbContext.SaveChangesAsync();
-            return await _dbContext.SaveChangesAsync() > 0;
+            try
+            {
+                _dbSet.Update(entity);
+                return await _dbContext.SaveChangesAsync() > 0;
+            }
+            catch (DbUpdateException ex)
+            {
+                Log.Error(ex, "Database error occurred when updating an entity.");
+                throw new Exception("Database error occurred.");
+            }
         }
 
         /// <summary>
@@ -78,13 +124,21 @@ namespace Banking.Application.Repositories.Implementations
         /// <returns>Taks of bool</returns>
         public async Task<bool> DeleteAsync(Guid id)
         {
-            var entity = await GetByIdAsync(id);
-            if (entity != null)
+            try
             {
-                _dbSet.Remove(entity);
-                return await _dbContext.SaveChangesAsync() > 0;
+                var entity = await GetByIdAsync(id);
+                if (entity != null)
+                {
+                    _dbSet.Remove(entity);
+                    return await _dbContext.SaveChangesAsync() > 0;
+                }
+                return false;
             }
-            return false;
+            catch (DbUpdateException ex)
+            {
+                Log.Error(ex, "Database error occurred when deleting an entity.");
+                throw new Exception("Database error occurred.");
+            }
         }
 
         /// <summary>
@@ -93,7 +147,15 @@ namespace Banking.Application.Repositories.Implementations
         /// <returns>Taks of bool</returns>
         public async Task<bool> SaveChangesAsync()
         {
-            return await _dbContext.SaveChangesAsync() > 0;
+            try
+            {
+                return await _dbContext.SaveChangesAsync() > 0;
+            }
+            catch (DbUpdateException ex)
+            {
+                Log.Error(ex, "Database error occurred when saving changes.");
+                throw new Exception("Database error occurred.");
+            }
         }
     }
 }
