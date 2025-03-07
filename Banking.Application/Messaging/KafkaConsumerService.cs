@@ -1,6 +1,6 @@
 ﻿using Banking.Application.Services.Interfaces;
 using Banking.Infrastructure.Config;
-using Banking.Infrastructure.Messaging.Kafka;
+using Banking.Infrastructure.Messaging.Kafka.Helpers;
 using Confluent.Kafka;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -13,14 +13,17 @@ public class KafkaConsumerService : BackgroundService
 {
     private readonly IConsumer<Null, string> _consumer;
     private readonly IServiceScopeFactory _serviceScopeFactory;
-    private readonly SolutionOptions _solutionOptions;
+    private readonly KafkaOptions _kafkaOptions;
+    private readonly IKafkaHelper _kafkaHelper;
 
     public KafkaConsumerService(ConsumerConfig config,
-        IOptions<SolutionOptions> solutionOptions,
+        IKafkaHelper kafkaHelper,
+        IOptions<KafkaOptions> kafkaOptions,
         IServiceScopeFactory serviceScopeFactory)
     {
         _serviceScopeFactory = serviceScopeFactory;
-        _solutionOptions = solutionOptions.Value;
+        _kafkaOptions = kafkaOptions.Value;
+        _kafkaHelper = kafkaHelper;
         _consumer = new ConsumerBuilder<Null, string>(config)
             .SetErrorHandler((_, e) => Log.Error($"Kafka Consumer error: {e.Reason}"))
             .Build();
@@ -38,21 +41,21 @@ public class KafkaConsumerService : BackgroundService
             try
             {
 
-                await KafkaHelper.CreateKafkaTopicAsync(
-                    _solutionOptions.Kafka.BootstrapServers,
-                    _solutionOptions.Kafka.TransactionsTopic);
+                await _kafkaHelper.CreateKafkaTopicAsync(
+                    _kafkaOptions.BootstrapServers,
+                    _kafkaOptions.TransactionsTopic);
 
 
                 using var adminClient = new AdminClientBuilder(new AdminClientConfig
                 {
-                    BootstrapServers = _solutionOptions.Kafka.BootstrapServers
+                    BootstrapServers = _kafkaOptions.BootstrapServers
                 }).Build();
 
-                await KafkaHelper.WaitForTopicAsync(_solutionOptions.Kafka.TransactionsTopic, adminClient);
+                await _kafkaHelper.WaitForTopicAsync(_kafkaOptions.TransactionsTopic, adminClient);
 
 
-                _consumer.Subscribe(_solutionOptions.Kafka.TransactionsTopic);
-                Log.Information($"KafkaConsumerService subscribed to {_solutionOptions.Kafka.TransactionsTopic}");
+                _consumer.Subscribe(_kafkaOptions.TransactionsTopic);
+                Log.Information($"KafkaConsumerService subscribed to {_kafkaOptions.TransactionsTopic}");
             }
             catch (Exception ex)
             {

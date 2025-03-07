@@ -15,18 +15,18 @@ public class PublishService : IPublishService
     private readonly ITransactionRepository _transactionRepository;
     private readonly IKafkaProducer _kafkaProducer;
     private readonly IRedisCacheService _redisCacheService;
-    private readonly SolutionOptions _solutionOptions;
+    private readonly KafkaOptions _kafkaOptions;
 
     public PublishService(
         IKafkaProducer kafkaProducer,
         ITransactionRepository transactionRepository,
         IRedisCacheService redisCacheService,
-        IOptions<SolutionOptions> solutionOptions)
+        IOptions<KafkaOptions> kafkaOptions)
     {
         _kafkaProducer = kafkaProducer;
         _transactionRepository = transactionRepository;
         _redisCacheService = redisCacheService;
-        _solutionOptions = solutionOptions.Value;
+        _kafkaOptions = kafkaOptions.Value;
     }
 
     /// <summary>
@@ -36,67 +36,61 @@ public class PublishService : IPublishService
     /// <returns>Task of Transaction</returns>
     public async Task<Transaction> PublishTransactionAsync(Transaction transaction)
     {
-        try
+        if (transaction.FromAccountId == null && transaction.ToAccountId == null)
         {
-            if (transaction.FromAccountId == transaction.ToAccountId)
-            {
-                Log.Warning("Transaction from and to accounts are same");
-                throw new Exception("Transaction from and to accounts are same");
-            }
-            if (transaction.FromAccountId == null && transaction.ToAccountId == null)
-            {
-                Log.Warning("Transaction must have at least one account");
-                throw new Exception("Transaction must have at least one account");
-            }
-
-            if (transaction.Amount <= 0)
-            {
-                Log.Warning($"Invalid transaction amount: {transaction.Amount}");
-                throw new Exception("Invalid transaction amount");
-            }
-
-            if (transaction.FromAccountId != null)
-            {
-                var balanceKey = $"balance:{transaction.FromAccountId}";
-
-                var balance = await _redisCacheService.GetBalanceAsync(transaction.FromAccountId.Value);
-
-                if (balance == null)
-                {
-                    Log.Information($"Balance for account {transaction.FromAccountId} not found in cache");                    
-                }
-
-                if (balance < transaction.Amount)
-                {
-                    Log.Warning($"Insufficient funds for account {transaction.FromAccountId}. " +
-                        $"Balance: {balance}, Required: {transaction.Amount}");
-                    throw new Exception($"Insufficient funds. Current balance is {balance}");
-                }
-            }
-
-            if (transaction.ToAccountId != null)
-            {
-                var balance = await _redisCacheService.GetBalanceAsync(transaction.ToAccountId.Value);
-
-                if (balance == null)
-                {
-                    Log.Information($"Balance for account {transaction.ToAccountId} not found in cache");
-                }
-            }
-            var entity = TransactionEntity.FromDomain(transaction);
-
-            await _transactionRepository.AddAsync(entity);
-
-            var transactionMessage = entity.ToDomain();
-            await _kafkaProducer.PublishAsync(_solutionOptions.Kafka.TransactionsTopic, transactionMessage);
-
-            return entity.ToDomain();
+            Log.Warning("Transaction must have at least one account");
+            throw new InvalidOperationException("Transaction must have at least one account");
         }
-        catch (Exception ex)
+
+        if (transaction.FromAccountId == transaction.ToAccountId)
         {
-            Log.Error(ex, "Error publishing transaction");
-            throw;
+            Log.Warning("Transaction from and to accounts are same");
+            throw new InvalidOperationException("Transaction from and to accounts are same");
         }
+
+        if (transaction.Amount <= 0)
+        {
+            Log.Warning($"Invalid transaction amount: {transaction.Amount}");
+            throw new InvalidOperationException("Invalid transaction amount");
+        }
+
+        if (transaction.FromAccountId != null)
+        {
+            var balanceKey = $"balance:{transaction.FromAccountId}";
+
+            var balance = await _redisCacheService.GetBalanceAsync(transaction.FromAccountId.Value);
+
+            if (balance == null)
+            {
+                Log.Information($"Balance for account {transaction.FromAccountId} not found in cache");
+            }
+
+            if (balance < transaction.Amount)
+            {
+                Log.Warning($"Insufficient funds for account {transaction.FromAccountId}. " +
+                    $"Balance: {balance}, Required: {transaction.Amount}");
+                throw new InvalidOperationException($"Insufficient funds. Current balance is {balance}");
+            }
+        }
+
+        if (transaction.ToAccountId != null)
+        {
+            var balance = await _redisCacheService.GetBalanceAsync(transaction.ToAccountId.Value);
+
+            if (balance == null)
+            {
+                Log.Information($"Balance for account {transaction.ToAccountId} not found in cache");
+            }
+        }
+        var entity = TransactionEntity.FromDomain(transaction);
+
+        await _transactionRepository.AddAsync(entity);
+
+        var transactionMessage = entity.ToDomain();
+        await _kafkaProducer.PublishAsync(_kafkaOptions.TransactionsTopic, transactionMessage);
+
+        return entity.ToDomain();
+
     }
 
     /// <summary>
@@ -108,7 +102,7 @@ public class PublishService : IPublishService
     {
         try
         {
-            await _kafkaProducer.PublishAsync(_solutionOptions.Kafka.NotificationsTopic, notificationEvent);
+            await _kafkaProducer.PublishAsync(_kafkaOptions.NotificationsTopic, notificationEvent);
         }
         catch (Exception ex)
         {

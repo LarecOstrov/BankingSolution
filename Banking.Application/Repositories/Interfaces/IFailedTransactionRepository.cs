@@ -2,8 +2,6 @@
 
 namespace Banking.Application.Repositories.Interfaces;
 
-public interface IFailedTransactionRepository
+public interface IFailedTransactionRepository : IBaseRepository<FailedTransactionEntity>
 {
-    Task AddAsync(FailedTransactionEntity failedTransaction);
-    IQueryable<FailedTransactionEntity> GetAll();
 }

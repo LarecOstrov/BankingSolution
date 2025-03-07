@@ -1,12 +1,11 @@
-﻿using Azure.Core;
-using Banking.Application.Repositories.Implementations;
-using Banking.Application.Repositories.Interfaces;
+﻿using Banking.Application.Repositories.Interfaces;
 using Banking.Application.Services.Interfaces;
 using Banking.Domain.ValueObjects;
 using Banking.Infrastructure.Config;
 using Banking.Infrastructure.Database.Entities;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Serilog;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -25,35 +24,35 @@ public class AuthService : IAuthService
     private readonly string _issuer;
     private readonly string _audience;
     private readonly int _expiryMinutes;
-    private readonly SolutionOptions _solutionOptions;
+    private readonly JwtOptions _jwtOptions;
 
     public AuthService(IUserRepository userRepository,
         IAccountService accountService,
         IAccountRepository accountRepository,
         IRoleRepository roleRepository,
         IRefreshTokenRepository refreshTokenRepository,
-        IOptions<SolutionOptions> solutionOptions)
+        IOptions<JwtOptions> jwtOptions)
     {
         _userRepository = userRepository;
         _accountService = accountService;
         _accountRepository = accountRepository;
         _roleRepository = roleRepository;
         _refreshTokenRepository = refreshTokenRepository;
-        _solutionOptions = solutionOptions.Value;
-        _jwtSecretKey = _solutionOptions.Jwt.SecretKey;
-        _issuer = _solutionOptions.Jwt.Issuer;
-        _audience = _solutionOptions.Jwt.Audience;
-        _expiryMinutes = _solutionOptions.Jwt.ExpiryMinutes;
+        _jwtOptions = jwtOptions.Value;
+        _jwtSecretKey = _jwtOptions.SecretKey;
+        _issuer = _jwtOptions.Issuer;
+        _audience = _jwtOptions.Audience;
+        _expiryMinutes = _jwtOptions.ExpiryMinutes;
     }
 
     public async Task<LoginResponse?> LoginAsync(LoginRequest request)
     {
         var user = await _userRepository.GetUserByEmailAsync(request.Email);
         if (user == null || !VerifyPassword(request.Password, user.PasswordHash))
-            throw new Exception("Invalid email or password");
+            throw new InvalidOperationException("Invalid email or password");
 
         if (!user.Confirmed)
-            throw new Exception("User not confirmed");
+            throw new InvalidOperationException("User not confirmed");
 
         var refreshToken = new RefreshTokenEntity
         {
@@ -69,81 +68,82 @@ public class AuthService : IAuthService
 
         var accessToken = GenerateJwtToken(user);
 
-        return new LoginResponse(accessToken, refreshToken.Token);        
+        return new LoginResponse(accessToken, refreshToken.Token);
     }
 
     public async Task<bool> RegisterAsync(RegisterRequest request)
     {
 
         if (await _userRepository.GetUserByEmailAsync(request.Email) != null)
-            return false;
+            throw new InvalidOperationException("User with this email already exists.");
 
         using (var transaction = await _userRepository.BeginTransactionAsync())
         {
-            try
+
+            bool confirmed = false;
+
+            if (request.Role.Trim().ToLower() == "admin")
             {
-                bool confirmed = false;
-
-                if (request.Role.Trim().ToLower() == "admin")
+                if (await _userRepository.CountAllAsync() == 0)
                 {
-                    if (await _userRepository.CountAllAsync() == 0)
+                    await _roleRepository.AddAsync(new RoleEntity
                     {
-                        await _roleRepository.AddAsync(new RoleEntity
-                        {
-                            Id = Guid.NewGuid(),
-                            Name = "Admin"
-                        });
+                        Id = Guid.NewGuid(),
+                        Name = "Admin"
+                    });
 
-                        confirmed = true;
-                    }
+                    confirmed = true;
                 }
-
-                var role = await _roleRepository.GetRoleByNameAsync(request.Role);
-                if (role == null)
-                {
-                    transaction.Rollback();
-                    return false;
-                }
-
-                var user = new UserEntity
-                {
-                    Id = Guid.NewGuid(),
-                    FullName = request.FullName,
-                    Email = request.Email,
-                    PasswordHash = HashPassword(request.Password),
-                    RoleId = role.Id,
-                    Confirmed = confirmed
-                };
-                var result = await _userRepository.AddAsync(user);
-
-                if (result == null)
-                {
-                    transaction.Rollback();
-                    return false;
-                }
-
-                var account = new AccountEntity
-                {
-                    Id = Guid.NewGuid(),
-                    AccountNumber = await _accountService.GenerateUniqueIBANAsync(),
-                    UserId = result.Id,
-                };
-
-                var resultAccount = await _accountRepository.AddAsync(account);
-                if (resultAccount == null)
-                {
-                    transaction.Rollback();
-                    return false;
-                }
-
-                transaction.Commit();
-                return true;
             }
-            catch
+
+            var role = await _roleRepository.GetRoleByNameAsync(request.Role);
+            if (role == null)
+            {
+                Log.Error($"Role {request.Role} not found during registration.");
+                transaction.Rollback();
+                throw new InvalidOperationException($"Role {request.Role} not found.");
+            }
+
+            var user = new UserEntity
+            {
+                Id = Guid.NewGuid(),
+                FullName = request.FullName,
+                Email = request.Email,
+                PasswordHash = HashPassword(request.Password),
+                RoleId = role.Id,
+                Confirmed = confirmed
+            };
+            var result = await _userRepository.AddAsync(user);
+
+            if (result == null)
             {
                 transaction.Rollback();
-                return false;
+                throw new Exception("Failed to create user.");
             }
+
+            var accountNumber = await _accountService.GenerateUniqueIBANAsync();
+            if (accountNumber == null)
+            {
+                transaction.Rollback();
+                throw new Exception("Failed to generate account number.");
+            }
+
+            var account = new AccountEntity
+            {
+                Id = Guid.NewGuid(),
+                AccountNumber = accountNumber,
+                UserId = result.Id,
+            };
+
+            var resultAccount = await _accountRepository.AddAsync(account);
+            if (resultAccount == null)
+            {
+                transaction.Rollback();
+                throw new Exception("Failed to create acount.");
+            }
+
+            transaction.Commit();
+            return true;
         }
     }
 
@@ -151,9 +151,10 @@ public class AuthService : IAuthService
     {
         var tokenEntity = await _refreshTokenRepository.GetByTokenAsync(refreshToken);
         if (tokenEntity == null || tokenEntity.ExpiryDate < DateTime.UtcNow)
-            return null;
+            throw new InvalidOperationException($"Invalid refresh token");
 
-        if (tokenEntity.User == null || tokenEntity.User.Role == null) return null;
+        if (tokenEntity.User == null || tokenEntity.User.Role == null)
+            throw new InvalidOperationException($"User or role not found");
 
         return GenerateJwtToken(tokenEntity.User);
     }
@@ -173,7 +174,7 @@ public class AuthService : IAuthService
             return null;
 
         var tokenHandler = new JwtSecurityTokenHandler();
-        
+
         var validationParams = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -195,7 +196,7 @@ public class AuthService : IAuthService
             return principal;
         }
         catch
-        {            
+        {
             return null;
         }
     }

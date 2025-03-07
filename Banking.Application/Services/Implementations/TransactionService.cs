@@ -1,5 +1,4 @@
-﻿using Banking.Application.Repositories.Implementations;
-using Banking.Application.Repositories.Interfaces;
+﻿using Banking.Application.Repositories.Interfaces;
 using Banking.Application.Services.Interfaces;
 using Banking.Domain.Entities;
 using Banking.Domain.Enums;
@@ -7,7 +6,6 @@ using Banking.Domain.ValueObjects;
 using Banking.Infrastructure.Caching;
 using Banking.Infrastructure.Config;
 using Banking.Infrastructure.Database.Entities;
-using Banking.Infrastructure.WebSockets;
 using Confluent.Kafka;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -25,7 +23,7 @@ public class TransactionService : ITransactionService
     private readonly IRedisCacheService _redisCacheService;
     private readonly IAccountRepository _accountRepository;
     private readonly IPublishService _publishService;
-    private readonly SolutionOptions _solutionOptions;
+    private readonly TransactionRetryPolicy _transactionRetryPolicy;
     private readonly int _maxRetries;
     private readonly int _delayMilliseconds;
 
@@ -36,7 +34,7 @@ public class TransactionService : ITransactionService
         IAccountRepository accountRepository,
         IRedisCacheService redisCacheService,
         IPublishService publishService,
-        IOptions<SolutionOptions> solutionOptions)
+        IOptions<TransactionRetryPolicy> transactionRetryPolicy)
     {
         _transactionRepository = transactionRepository;
         _failedTransactionRepository = failedTransactionRepository;
@@ -44,12 +42,12 @@ public class TransactionService : ITransactionService
         _accountRepository = accountRepository;
         _redisCacheService = redisCacheService;
         _publishService = publishService;
-        _solutionOptions = solutionOptions.Value;
-        _maxRetries = _solutionOptions.TransactionRetryPolicy.MaxRetries;
-        _delayMilliseconds = _solutionOptions.TransactionRetryPolicy.DelayMilliseconds;
+        _transactionRetryPolicy = transactionRetryPolicy.Value;
+        _maxRetries = _transactionRetryPolicy.MaxRetries;
+        _delayMilliseconds = _transactionRetryPolicy.DelayMilliseconds;
 
     }
-    
+
     /// <summary>
     /// Process the transaction from Queue
     /// </summary>
@@ -57,85 +55,80 @@ public class TransactionService : ITransactionService
     /// <returns>Bollean indicating if the transaction was successful</returns>
     public async Task<bool> ProcessTransactionAsync(ConsumeResult<Null, string> consumeResult)
     {
+        Transaction? transactionObject;
         try
         {
-            var transactionObject = JsonSerializer.Deserialize<Transaction>(consumeResult.Message.Value);
+            transactionObject = JsonSerializer.Deserialize<Transaction>(consumeResult.Message.Value);
             if (transactionObject == null)
             {
-                Log.Error("Received null transaction from Kafka");
-                await SaveFailedTransaction(consumeResult.Message.Value, "Received null transaction from Kafka");
-                return false;
+                throw new ArgumentNullException(nameof(transactionObject), "Отримано null транзакцію з Kafka.");
             }
-
-            int retryCount = 0;
-
-            while (retryCount < _maxRetries)
-            {
-                try
-                {
-                    using (var transaction = await _transactionRepository.BeginTransactionAsync())
-                    {
-                        try
-                        {
-                            var transactionEntity = await _transactionRepository.GetByIdAsync(transactionObject.Id);
-                            if (transactionEntity == null)
-                            {
-                                Log.Error($"Transaction {transactionObject.Id} not found.");
-                                await transaction.RollbackAsync();
-                                await SaveFailedTransaction(consumeResult.Message.Value, "Transaction not found");
-                                return false;
-                            }
-
-                            if (transactionEntity.Status != TransactionStatus.Pending)
-                            {
-                                Log.Warning($"Transaction {transactionObject.Id} already processed.");
-                                await transaction.RollbackAsync();
-                                await SaveFailedTransaction(consumeResult.Message.Value, "Transaction already processed");
-                                return false;
-                            }
-
-                            var success = await ProcessTransactionInternal(transactionObject, transactionEntity);
-                            if (!success)
-                            {
-                                await transaction.RollbackAsync();
-                                transactionEntity.Status = TransactionStatus.Failed;                                
-                                await _transactionRepository.SaveChangesAsync();
-
-                                await SaveFailedTransaction(consumeResult.Message.Value,
-                                    transactionEntity.FailureReason ?? "Unknown reason");
-                                return true;
-                            }
-
-                            transactionEntity.Status = TransactionStatus.Completed;
-                            await _transactionRepository.SaveChangesAsync();
-                            await transaction.CommitAsync();
-                            return true;
-                        }
-                        catch (Exception ex) when (IsTransientError(ex))
-                        {
-                            Log.Warning($"Transaction {transactionObject.Id} failed due to locking. Retrying {retryCount + 1}/{_maxRetries}...");
-                            await transaction.RollbackAsync();
-                            retryCount++;
-                            await Task.Delay(_delayMilliseconds);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "Unexpected error processing transaction");
-                    return false;
-                }
-            }
-
-            Log.Error($"Transaction {transactionObject.Id} failed after {_maxRetries} attempts.");
-            return false;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Error processing transaction");
+            Log.Error(ex, "Error deserializing transaction from Kafka message");
+            await SaveFailedTransaction(consumeResult.Message.Value, "Error deserializing transaction from Kafka message");
             return false;
         }
+
+        int retryCount = 0;
+        while (retryCount < _maxRetries)
+        {
+            try
+            {
+                using (var dbTransaction = await _transactionRepository.BeginTransactionAsync())
+                {
+                    var transactionEntity = await _transactionRepository.GetByIdAsync(transactionObject.Id);
+                    if (transactionEntity == null)
+                    {
+                        Log.Error($"Transaction {transactionObject.Id} not found.");
+                        await dbTransaction.RollbackAsync();
+                        await SaveFailedTransaction(consumeResult.Message.Value, "Transaction not found");
+                        return false;
+                    }
+
+                    if (transactionEntity.Status != TransactionStatus.Pending)
+                    {
+                        Log.Warning($"Transaction {transactionObject.Id} already processed.");
+                        await dbTransaction.RollbackAsync();
+                        await SaveFailedTransaction(consumeResult.Message.Value, "Transaction already processed");
+                        return false;
+                    }
+
+                    bool success = await ProcessTransactionInternal(transactionObject, transactionEntity);
+                    if (!success)
+                    {
+                        transactionEntity.Status = TransactionStatus.Failed;
+                        await _transactionRepository.SaveChangesAsync();
+                        await dbTransaction.RollbackAsync();
+                        await SaveFailedTransaction(consumeResult.Message.Value, transactionEntity.FailureReason ?? "Unknown reason");
+                        return false;
+                    }
+
+                    transactionEntity.Status = TransactionStatus.Completed;
+                    await _transactionRepository.SaveChangesAsync();
+                    await dbTransaction.CommitAsync();
+                    return true;
+                }
+            }
+            catch (Exception ex) when (IsTransientError(ex))
+            {
+                retryCount++;
+                Log.Warning(ex, $"Transaction {transactionObject.Id} failed with transient error. Retrying {retryCount}/{_maxRetries}.");
+                await Task.Delay(_delayMilliseconds);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, $"Unexpected error processing transaction {transactionObject.Id}");
+                await SaveFailedTransaction(consumeResult.Message.Value, "Unexpected error processing transaction");
+                return false;
+            }
+        }
+
+        Log.Error($"Transaction {transactionObject.Id} failed after {_maxRetries} retries.");
+        return false;
     }
+
     /// <summary>
     /// Save the failed transaction
     /// </summary>
@@ -151,13 +144,23 @@ public class TransactionService : ITransactionService
                 TransactionMessage = transactionMessage,
                 Reason = reason,
             };
-            await _failedTransactionRepository.AddAsync(failedTransaction);
+
+            var result = await _failedTransactionRepository.AddAsync(failedTransaction);
+            if (result == null)
+            {
+                Log.Error("Failed to save failed transaction");
+            }
+            else
+            {
+                Log.Information($"Failed transaction saved: {result.TransactionMessage}");
+            }
         }
         catch (Exception ex)
         {
             Log.Error(ex, "Error saving failed transaction");
         }
     }
+
 
     /// <summary>
     /// Check if the exception is a transient error that can be retried
@@ -229,7 +232,8 @@ public class TransactionService : ITransactionService
             await SaveBalanceHistory(toAccount, transactionObject.Id);
         }
 
-        await _publishService.PublishTransactionNotificationAsync(FromTransactionData(fromAccount, toAccount, transactionObject.Amount));
+        await _publishService.PublishTransactionNotificationAsync(
+            CreateTransactionNotification(fromAccount, toAccount, transactionObject.Amount));
 
         return true;
     }
@@ -264,7 +268,7 @@ public class TransactionService : ITransactionService
     /// <param name="toAccount"></param>
     /// <param name="amount"></param>
     /// <returns></returns>
-    private static TransactionNotificationEvent FromTransactionData(AccountEntity? fromAccount, AccountEntity? toAccount, decimal amount)
+    private static TransactionNotificationEvent CreateTransactionNotification(AccountEntity? fromAccount, AccountEntity? toAccount, decimal amount)
     {
         return new TransactionNotificationEvent
         {
@@ -291,6 +295,6 @@ public class TransactionService : ITransactionService
 
     #endregion
 
-    
+
 }
 

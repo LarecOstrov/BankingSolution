@@ -10,6 +10,7 @@ using Banking.Infrastructure.Caching;
 using Banking.Infrastructure.Config;
 using Banking.Infrastructure.Database;
 using Banking.Infrastructure.Messaging.Kafka;
+using Banking.Infrastructure.Messaging.Kafka.Helpers;
 using Banking.Infrastructure.Middleware;
 using Banking.Infrastructure.WebSockets;
 using Confluent.Kafka;
@@ -74,7 +75,7 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
 
     // Services
     services.AddControllers();
-    services.AddSingleton<WebSocketService>();
+    services.AddSingleton<IWebSocketService, WebSocketService>();
     services.AddScoped<IPublishService, PublishService>();
     services.AddScoped<ITransactionService, TransactionService>();
     services.AddScoped<IAccountService, AccountService>();
@@ -107,7 +108,7 @@ void ConfigureServicesAsync(IServiceCollection services, SolutionOptions solutio
     services.AddScoped<Query>();
     services.AddAuthorization();
     services.AddValidation();
-    
+
     // CORS Configuration
     var corsOptions = solutionOptions.Cors;
     services.AddCors(options =>
@@ -159,8 +160,9 @@ void ConfigureMessagingAsync(IServiceCollection services, SolutionOptions soluti
     // Services
     services.AddControllers();
     services.AddSingleton<ProducerConfig>(kafkaProducerConfig);
-    services.AddSingleton<IKafkaProducer, KafkaProducer>();    
-    services.AddSingleton(kafkaConsumerNotificationConfig);    
+    services.AddSingleton<IKafkaProducer, KafkaProducer>();
+    services.AddSingleton<IKafkaHelper, KafkaHelper>();
+    services.AddSingleton(kafkaConsumerNotificationConfig);
     services.AddHostedService<KafkaNotificationConsumerService>();
 }
 
@@ -177,6 +179,8 @@ async Task ConfigureMiddleware(WebApplication app, SolutionOptions appOptions)
 
     // Request logging
     app.UseMiddleware<RequestLoggingMiddleware>();
+    app.UseMiddleware<ExceptionHandlingMiddleware>();
+    app.UseExceptionHandling();
     app.UseRequestLogging();
 
     // Auto-migrate database in development

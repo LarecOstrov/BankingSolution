@@ -11,6 +11,7 @@ public class UserEntity
     [MaxLength(100)]
     public required string FullName { get; set; } = string.Empty;
     [MaxLength(255)]
+    [EmailAddress]
     public required string Email { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public ICollection<AccountEntity> Accounts { get; set; } = new List<AccountEntity>();

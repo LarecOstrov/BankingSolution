@@ -4,26 +4,25 @@ using Banking.Infrastructure.Config;
 using Microsoft.Extensions.Options;
 using System.Numerics;
 using System.Text;
-using System;
 
 namespace Banking.Application.Implementations;
 
 public class AccountService : IAccountService
 {
     private readonly IAccountRepository _accountRepository;
-    private readonly SolutionOptions _solutionOptions;
+    private readonly BankInfo _bankInfo;
     private readonly Random _random = new Random();
     private readonly int _accountLength;
     private readonly string _countryCode;
     private readonly string _bankCode;
     public AccountService(IAccountRepository accountRepository,
-        IOptions<SolutionOptions> solutionOptions)
+        IOptions<BankInfo> bankInfo)
     {
         _accountRepository = accountRepository;
-        _solutionOptions = solutionOptions.Value;
-        _accountLength = _solutionOptions.BankInfo.AccountLength;
-        _countryCode = _solutionOptions.BankInfo.Country;
-        _bankCode = _solutionOptions.BankInfo.Code;
+        _bankInfo = bankInfo.Value;
+        _accountLength = _bankInfo.AccountLength;
+        _countryCode = _bankInfo.Country;
+        _bankCode = _bankInfo.Code;
 
     }
     public async Task<bool> IsAccountOwnerAsync(Guid accountId, Guid userId)
@@ -64,13 +63,13 @@ public class AccountService : IAccountService
     #region Private Methods
     private static string CalculateIBANChecksum(string ibanWithoutChecksum)
     {
-        
+
         string countryDigits = ConvertLettersToDigits(ibanWithoutChecksum.Substring(0, 2));
 
-       
+
         string numericIban = ibanWithoutChecksum.Substring(4) + countryDigits + "00";
 
-        
+
         BigInteger ibanNumber = BigInteger.Parse(numericIban);
         int checksum = 98 - (int)(ibanNumber % 97);
 

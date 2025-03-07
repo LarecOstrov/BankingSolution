@@ -25,24 +25,17 @@ namespace Banking.API.Controllers
         [HttpGet("{accountId}")]
         public async Task<IActionResult> GetBalanceHistory(Guid accountId)
         {
-            try
+            var userId = _authService.GetUserIdFromToken(User);
+            if (userId == null)
             {
-                var userId = _authService.GetUserIdFromToken(User);
-                if (userId == null)
-                {
-                    return Unauthorized("User ID not found in token.");
-                }
-                var balanceHistory = await _balanceHistoryRepository.GetBalanceHistoryByAccountIdAsync(accountId, userId.Value);
-                if (balanceHistory == null)
-                {
-                    return NotFound("Balance history not found.");
-                }
-                return Ok(balanceHistory);
+                return Unauthorized("User ID not found in token.");
             }
-            catch (Exception ex)
+            var balanceHistory = await _balanceHistoryRepository.GetBalanceHistoryByAccountIdAsync(accountId, userId.Value);
+            if (balanceHistory == null)
             {
-                return BadRequest(ex.Message);
+                return NotFound("Balance history not found.");
             }
+            return Ok(balanceHistory);
         }
     }
 }

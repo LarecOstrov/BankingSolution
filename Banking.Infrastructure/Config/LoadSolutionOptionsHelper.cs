@@ -39,7 +39,32 @@ public static class LoadSolutionOptionsHelper
             throw new InvalidOperationException(errorMsg);
         }
 
-        builder.Services.Configure<SolutionOptions>(builder.Configuration.GetSection("SolutionOptions"));
+        builder.Services
+            .Configure<SolutionOptions>(builder.Configuration.GetSection("SolutionOptions"));
+        builder.Services
+            .Configure<ConnectionStringsOptions>(builder.Configuration
+            .GetSection("SolutionOptions:ConnectionStrings"));
+        builder.Services
+            .Configure<RedisOptions>(builder.Configuration
+            .GetSection("SolutionOptions:Redis"));
+        builder.Services
+            .Configure<KafkaOptions>(builder.Configuration
+            .GetSection("SolutionOptions:Kafka"));
+        builder.Services
+            .Configure<LoggingOptions>(builder.Configuration
+            .GetSection("SolutionOptions:Logging"));
+        builder.Services
+            .Configure<CorsOptions>(builder.Configuration
+            .GetSection("SolutionOptions:Cors"));
+        builder
+            .Services.Configure<JwtOptions>(builder.Configuration
+            .GetSection("SolutionOptions:Jwt"));
+        builder.Services
+            .Configure<BankInfo>(builder.Configuration
+            .GetSection("SolutionOptions:BankInfo"));
+        builder.Services
+            .Configure<TransactionRetryPolicy>(builder.Configuration
+            .GetSection("SolutionOptions:TransactionRetryPolicy"));
         return solutionOptions!;
     }
 }

@@ -1,6 +1,5 @@
 ﻿using Banking.Infrastructure.Caching;
 using Banking.Infrastructure.Config;
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 using System.Text.Json;
@@ -8,16 +7,16 @@ using System.Text.Json;
 public class RedisCacheService : IRedisCacheService
 {
     private readonly IDatabase _cache;
-    private readonly SolutionOptions _solutionOptions;
+    private readonly RedisOptions _redisOptions;
     private readonly int _balanceLifetimeMinutes;
 
     public RedisCacheService(
         IConnectionMultiplexer redis,
-        IOptions<SolutionOptions> solutionOptions)
+        IOptions<RedisOptions> redisOptions)
     {
         _cache = redis.GetDatabase();
-        _solutionOptions = solutionOptions.Value;
-        _balanceLifetimeMinutes = _solutionOptions.Redis.BalanceLifetimeMinutes;
+        _redisOptions = redisOptions.Value;
+        _balanceLifetimeMinutes = _redisOptions.BalanceLifetimeMinutes;
     }
 
     /// <summary>
@@ -43,6 +42,6 @@ public class RedisCacheService : IRedisCacheService
     {
         var balanceKey = $"balance_{accountId}";
         var balanceString = JsonSerializer.Serialize(newBalance);
-        await _cache.StringSetAsync(balanceKey, balanceString, TimeSpan.FromHours(_balanceLifetimeMinutes));
+        await _cache.StringSetAsync(balanceKey, balanceString, TimeSpan.FromMinutes(_balanceLifetimeMinutes));
     }
 }

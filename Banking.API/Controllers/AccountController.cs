@@ -1,5 +1,4 @@
-﻿using Banking.Application.Implementations;
-using Banking.Application.Repositories.Interfaces;
+﻿using Banking.Application.Repositories.Interfaces;
 using Banking.Application.Services.Interfaces;
 using Banking.Infrastructure.Caching;
 using Microsoft.AspNetCore.Authorization;
@@ -31,26 +30,19 @@ public class AccountController : ControllerBase
     [HttpGet("{accountId}")]
     public async Task<IActionResult> GetAccountDetails(Guid accountId)
     {
-        try
+        var userId = _authService.GetUserIdFromToken(User);
+        if (userId == null)
         {
-            var userId = _authService.GetUserIdFromToken(User);
-            if (userId == null)
-            {
-                return Unauthorized("User ID not found in token.");
-            }
-
-            var account = await _accountRepository.GetByAccountNumberAsync(accountId, userId.Value);
-            if (account == null)
-            {
-                return NotFound("Account not found.");
-            }
-
-            return Ok(account);
+            return Unauthorized("User ID not found in token.");
         }
-        catch (Exception ex)
+
+        var account = await _accountRepository.GetByAccountNumberAsync(accountId, userId.Value);
+        if (account == null)
         {
-            return BadRequest(ex.Message);
+            return NotFound("Account not found.");
         }
+
+        return Ok(account);
     }
 
     /// <summary>
@@ -61,32 +53,25 @@ public class AccountController : ControllerBase
     [HttpGet("balance")]
     public async Task<IActionResult> GetBalance(Guid accountId)
     {
-        try
+        var userId = _authService.GetUserIdFromToken(User);
+        if (userId == null)
         {
-            var userId = _authService.GetUserIdFromToken(User);
-            if (userId == null)
-            {
-                return Unauthorized("User ID not found in token.");
-            }
-            
-
-            var balance = await _redisCacheService.GetBalanceAsync(accountId);
-            if (balance != null)
-            {
-                return Ok($"Balance for account {accountId}: {balance}");
-            }
-
-            var account = await _accountRepository.GetByAccountNumberAsync(accountId, userId.Value);
-            if (account == null)
-            {
-                return NotFound("Account not found.");
-            }
-
-            return Ok($"Balance for account {account.Id}: {account.Balance}");
+            return Unauthorized("User ID not found in token.");
         }
-        catch (Exception ex)
+
+
+        var balance = await _redisCacheService.GetBalanceAsync(accountId);
+        if (balance != null)
         {
-            return BadRequest(ex.Message);
+            return Ok($"Balance for account {accountId}: {balance}");
         }
+
+        var account = await _accountRepository.GetByAccountNumberAsync(accountId, userId.Value);
+        if (account == null)
+        {
+            return NotFound("Account not found.");
+        }
+
+        return Ok($"Balance for account {account.Id}: {account.Balance}");
     }
 }

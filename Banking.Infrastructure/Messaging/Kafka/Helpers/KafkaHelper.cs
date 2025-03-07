@@ -2,9 +2,9 @@
 using Confluent.Kafka.Admin;
 using Serilog;
 
-namespace Banking.Infrastructure.Messaging.Kafka;
+namespace Banking.Infrastructure.Messaging.Kafka.Helpers;
 
-public static class KafkaHelper
+public class KafkaHelper : IKafkaHelper
 {
     /// <summary>
     /// Waits for a Kafka topic to be available
@@ -12,9 +12,9 @@ public static class KafkaHelper
     /// <param name="topic"></param>
     /// <param name="adminClient"></param>
     /// <returns>Task</returns>
-    public static async Task WaitForTopicAsync(string topic, IAdminClient adminClient)
+    public async Task WaitForTopicAsync(string topic, IAdminClient adminClient)
     {
-        Log.Information($"Kafka start wait for topic {topic}");        
+        Log.Information($"Kafka start wait for topic {topic}");
 
         while (true)
         {
@@ -42,7 +42,7 @@ public static class KafkaHelper
     /// <param name="bootstrapServers"></param>
     /// <param name="topicName"></param>
     /// <returns>Task</returns>
-    public static async Task CreateKafkaTopicAsync(string bootstrapServers, string topicName)
+    public async Task CreateKafkaTopicAsync(string bootstrapServers, string topicName)
     {
         using var adminClient = new AdminClientBuilder(new AdminClientConfig { BootstrapServers = bootstrapServers }).Build();
 

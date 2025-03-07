@@ -14,8 +14,11 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Banking.Worker", "Banking.Worker\Banking.Worker.csproj", "{31DF0C8E-F37C-4E95-9773-9F52C349624E}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Banking.Tests.Unit", "Banking.Tests.Unit\Banking.Tests.Unit.csproj", "{B9395348-4ADF-4A6C-AFAE-93CD1D5A82D9}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Banking.Tests.Integration", "Banking.Tests.Integration\Banking.Tests.Integration.csproj", "{9D883424-3EB0-4764-A443-F36409E8440E}"
+	ProjectSection(ProjectDependencies) = postProject
+		{0221673F-50B3-4D0F-AB9B-CE4CB714A942} = {0221673F-50B3-4D0F-AB9B-CE4CB714A942}
+		{11C18329-4780-4B34-999F-E2A92F1622C9} = {11C18329-4780-4B34-999F-E2A92F1622C9}
+		{2E085F04-C41F-43A3-B81E-8D81CB92F184} = {2E085F04-C41F-43A3-B81E-8D81CB92F184}
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{4CF3168C-E9A2-447B-B428-498120746086}"
 	ProjectSection(SolutionItems) = preProject
@@ -52,10 +55,6 @@ Global
 		{B9395348-4ADF-4A6C-AFAE-93CD1D5A82D9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B9395348-4ADF-4A6C-AFAE-93CD1D5A82D9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B9395348-4ADF-4A6C-AFAE-93CD1D5A82D9}.Release|Any CPU.Build.0 = Release|Any CPU
-		{9D883424-3EB0-4764-A443-F36409E8440E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{9D883424-3EB0-4764-A443-F36409E8440E}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{9D883424-3EB0-4764-A443-F36409E8440E}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{9D883424-3EB0-4764-A443-F36409E8440E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

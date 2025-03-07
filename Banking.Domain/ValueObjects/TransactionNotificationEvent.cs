@@ -11,5 +11,5 @@ public class TransactionNotificationEvent
     public string? ToUserName { get; set; }
     public decimal? FromAccountBalance { get; set; }
     public decimal? ToAccountBalance { get; set; }
-    public DateTime Timestamp { get; set; } = DateTime.UtcNow;    
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 }

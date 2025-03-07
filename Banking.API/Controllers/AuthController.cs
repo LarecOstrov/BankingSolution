@@ -23,8 +23,11 @@ namespace Banking.API.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterRequest rerquest)
         {
+
             var success = await _authService.RegisterAsync(rerquest);
             return success ? Ok("User registered. Wait account verification.") : BadRequest("Registration failed");
+
+
         }
 
         /// <summary>
@@ -35,15 +38,10 @@ namespace Banking.API.Controllers
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
-            try
-            {
-                var tokens = await _authService.LoginAsync(request);
-                return tokens != null ? Ok(tokens) : Unauthorized();
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(ex.Message);
-            }
+
+            var tokens = await _authService.LoginAsync(request);
+            return tokens != null ? Ok(tokens) : Unauthorized();
+
         }
 
         /// <summary>
@@ -54,8 +52,10 @@ namespace Banking.API.Controllers
         [HttpPost("refresh")]
         public async Task<IActionResult> Refresh([FromBody] string refreshToken)
         {
+
             var newToken = await _authService.RefreshTokenAsync(refreshToken);
             return newToken != null ? Ok(new { Token = newToken }) : Unauthorized();
+
         }
     }
 }
