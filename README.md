@@ -209,6 +209,10 @@ ws://localhost:8080/ws?access_token={accessToken}
 ```
 This will enable real-time transaction notifications.
 
+## Database Schema
+<img width="467" alt="image" src="https://github.com/user-attachments/assets/2f5abbbd-b307-4e69-96fb-396af10cd46a" />
+
+
 ## Running Tests
 Automated tests are included in the solution. Run tests using:
 ```sh
