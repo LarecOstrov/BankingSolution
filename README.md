@@ -13,13 +13,57 @@ Banking Solution is a .NET 9-based system that provides a robust banking API wit
 - Admin features through GraphQL API
 - Dockerized deployment with `docker-compose`
 
+## Architecture
+
+The system follows a microservices-based architecture, with separate components handling different aspects of the banking workflow. The key components are:
+
+### 1. API Service
+
+Exposes RESTful endpoints for user authentication, account management, and transactions.
+Provides a GraphQL interface for administrative functions.
+Manages WebSocket connections for real-time transaction notifications.
+Sends transaction requests to the Kafka queue for asynchronous processing.
+
+### 2. Worker Service
+
+Listens to the Kafka queue for incoming transactions.
+Processes transactions, updating the database and ensuring consistency.
+Updates Redis cache with the latest account balances for fast retrieval.
+Sends transaction results back to Kafka for the API to consume and notify users.
+
+### 3. Database (MS SQL Server)
+
+Stores account details, transactions, and balance history.
+Ensures ACID compliance for financial operations.
+Indexed for optimized read and write performance.
+
+### 4. Message Queue (Kafka)
+
+Provides asynchronous transaction processing, improving system scalability.
+Ensures message durability and fault tolerance.
+Allows event-driven communication between services.
+
+### 5. Caching Layer (Redis)
+
+Stores frequently accessed account balances to reduce database load.
+Ensures fast retrieval of data for real-time API responses.
+
+### 6. WebSockets
+
+Enables real-time updates to users about transaction statuses.
+Reduces polling overhead and improves responsiveness.
+
+
 ## Technology Stack
-- **Backend:** .NET 9 (C#), ASP.NET Core, Entity Framework Core
-- **Database:** Microsoft SQL Server
-- **Messaging:** Apache Kafka
-- **Caching:** Redis
-- **Real-time communication:** WebSockets
-- **Containerization:** Docker, Docker Compose
+
+The choice of technologies was made based on performance, scalability, and reliability requirements:
+.NET 9 (C#): Provides high performance and strong type safety.
+ASP.NET Core: Enables fast and secure API development.
+Entity Framework Core: Simplifies database interactions while maintaining efficiency.
+MS SQL Server: Ensures data integrity and supports complex transactions.
+Apache Kafka: Handles asynchronous processing and event-driven architecture.
+Redis: Optimizes performance with low-latency caching.
+Docker & Docker Compose: Facilitates containerized deployment and portability.
 
 ## Installation and Setup
 
