@@ -1,0 +1,144 @@
+x-environment: &common-environment
+  ASPNETCORE_ENVIRONMENT: Development
+  SolutionOptions__Kafka__BootstrapServers: kafka:29092
+  SolutionOptions__Redis__Host: redis:6379
+  SolutionOptions__ConnectionStrings__DefaultConnection: "Server=db;Database=BankingDB;User Id=sa;Password=BestBanking!2025;TrustServerCertificate=True"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Banking.API/Dockerfile
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    depends_on:
+      db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *common-environment      
+      ASPNETCORE_URLS: http://+:8080;http://+:8081
+    volumes:
+      - dataprotection-keys:/root/.aspnet/DataProtection-Keys
+    restart: always
+    healthcheck:
+      test: ["CMD", "sh", "-c", "curl -f http://localhost:8080/health || curl -f http://localhost:8081/health"]
+      interval: 30s
+      retries: 5
+      timeout: 10s
+      start_period: 20s
+
+  worker:
+    build:
+      context: .
+      dockerfile: Banking.Worker/Dockerfile
+    ports:
+    - "8082:8082"
+    - "8083:8083"
+    depends_on:
+      db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+     <<: *common-environment 
+     ASPNETCORE_URLS: http://+:8082;http://+:8083
+    restart: always
+    healthcheck:
+      test: ["CMD", "sh", "-c", "curl -f http://localhost:8082/health || curl -f http://localhost:8083/health"]
+      interval: 30s
+      retries: 5
+      timeout: 10s
+      start_period: 20s
+
+  db:
+    image: "mcr.microsoft.com/mssql/server:2022-latest"
+    container_name: banking_db
+    ports:
+      - "1433:1433"
+    environment:
+      SA_PASSWORD: "BestBanking!2025"
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+    volumes:
+      - mssql_data:/var/opt/mssql
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "exit 0"]
+      interval: 10s
+      retries: 10
+      timeout: 5s
+      start_period: 60s    
+
+  redis:
+    image: "redis:latest"
+    container_name: banking_redis
+    ports:
+      - "6379:6379"
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+      timeout: 3s
+
+  kafka:
+    image: "bitnami/kafka:latest"
+    container_name: banking_kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_CFG_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      KAFKA_CFG_BROKER_ID: 1
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+      KAFKA_CFG_LISTENERS: PLAINTEXT://0.0.0.0:9092, PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_HOST://kafka:29092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CFG_LOG_DIRS: /bitnami/kafka/data
+      KAFKA_CFG_LOG_RETENTION_HOURS: 168
+      KAFKA_CFG_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka_data:/bitnami/kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    restart: always
+    healthcheck:
+      test: ["CMD", "kafka-topics.sh", "--list", "--bootstrap-server", "kafka:9092"]
+      interval: 20s
+      retries: 5
+      timeout: 10s
+      start_period: 30s 
+
+  zookeeper:
+    image: "bitnami/zookeeper:latest"
+    container_name: banking_zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ALLOW_ANONYMOUS_LOGIN: "yes"
+      ZOO_4LW_COMMANDS_WHITELIST: "ruok,stat,conf,isro"
+    volumes:
+      - zookeeper_data:/bitnami/zookeeper
+    restart: always
+    healthcheck:
+      test: ["CMD", "sh", "-c", "echo 'ruok' | nc -w 2 localhost 2181 | grep imok || exit 1"]
+      interval: 10s
+      retries: 5
+      timeout: 5s
+      start_period: 30s 
+
+
+volumes:
+  mssql_data:
+  kafka_data:
+  zookeeper_data:
+  dataprotection-keys:
